@@ -1,0 +1,90 @@
+name: Docs preview
+run-name: Preview docs for PR #${{ github.event.pull_request.number }}
+
+# The documentation site is built from this repo's doc/ folder by a different
+# repository (CelerData/phoenixai-anywhere-docs). Without this workflow, a PR
+# that changes doc/ has no rendered preview at all, and the only way to see one
+# is to dispatch the docs-repo workflow by hand.
+#
+# This job does not build anything itself. It asks the docs repo to build a
+# preview from this PR's head and comments a link to that run.
+#
+# pull_request_target rather than pull_request, because a PR from a fork gets no
+# access to secrets under pull_request, and the token below is required. This is
+# safe here only because the job never checks out or executes PR code — it reads
+# the PR number and nothing else. Do not add a checkout of the PR head.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'doc/**'
+
+permissions:
+  pull-requests: write
+
+jobs:
+  trigger-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the docs repo to build a preview
+        env:
+          # A token with `actions: write` on CelerData/phoenixai-anywhere-docs.
+          # A fine-grained PAT scoped to that one repository is enough.
+          GH_TOKEN: ${{ secrets.DOCS_REPO_DISPATCH_TOKEN }}
+          DOCS_REPO: CelerData/phoenixai-anywhere-docs
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::warning::DOCS_REPO_DISPATCH_TOKEN is not set; skipping the docs preview."
+            echo "Add a fine-grained PAT with 'actions: write' on ${DOCS_REPO} to enable it."
+            exit 0
+          fi
+
+          # refs/pull/N/head exists on this repository even for PRs from forks,
+          # so the docs repo can fetch it without needing access to the fork.
+          gh workflow run kubernetes-vercel-preview.yml \
+            -R "${DOCS_REPO}" \
+            --ref main \
+            -f "operator_ref=refs/pull/${PR_NUMBER}/head"
+
+          echo "Dispatched a docs preview for refs/pull/${PR_NUMBER}/head"
+
+      - name: Comment the preview run on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_TOKEN: ${{ secrets.DOCS_REPO_DISPATCH_TOKEN }}
+          DOCS_REPO: CelerData/phoenixai-anywhere-docs
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          [ -n "${DISPATCH_TOKEN}" ] || exit 0
+
+          # Give the dispatch a moment to register as a run, then link to it.
+          # The run's job summary carries the deployed preview URL.
+          sleep 15
+          run_url="$(GH_TOKEN="${DISPATCH_TOKEN}" gh run list \
+            -R "${DOCS_REPO}" \
+            --workflow=kubernetes-vercel-preview.yml \
+            --limit 1 --json url --jq '.[0].url' 2>/dev/null || true)"
+
+          body="$(printf '%s\n' \
+            '<!-- operator-docs-preview -->' \
+            '## 📖 Documentation preview' \
+            '' \
+            'This PR changes `doc/`, which is the source for the documentation site.' \
+            '' \
+            "A preview is building from \`refs/pull/${PR_NUMBER}/head\`: ${run_url:-see the docs repo Actions tab}" \
+            '' \
+            'The deployed URL appears in that run'"'"'s job summary when it finishes.')"
+
+          # Replace the previous comment rather than adding one per push.
+          existing="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | contains("<!-- operator-docs-preview -->")) | .id' \
+            2>/dev/null | head -1)"
+
+          if [ -n "${existing}" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" -f body="${body}" >/dev/null
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
+          fi
