@@ -1,0 +1,5 @@
+{
+  "label": "Configure",
+  "position": 2,
+  "link": { "type": "generated-index", "description": "Adjust storage, configuration files, credentials, and logging on a running cluster." }
+}

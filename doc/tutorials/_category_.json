@@ -1,0 +1,5 @@
+{
+  "label": "Tutorials",
+  "position": 1,
+  "link": { "type": "generated-index", "description": "Start here. End-to-end lessons that take you from nothing to a working PhoenixAI cluster on Kubernetes." }
+}

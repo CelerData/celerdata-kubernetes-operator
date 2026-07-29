@@ -1,0 +1,5 @@
+{
+  "label": "Build Your Own Images",
+  "position": 5,
+  "link": { "type": "generated-index", "description": "Build the operator and component container images from source." }
+}

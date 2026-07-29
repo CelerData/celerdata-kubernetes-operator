@@ -1,0 +1,5 @@
+{
+  "label": "Operate",
+  "position": 4,
+  "link": { "type": "generated-index", "description": "Day-2 tasks: reach the cluster, upgrade it, load data, and recover it." }
+}

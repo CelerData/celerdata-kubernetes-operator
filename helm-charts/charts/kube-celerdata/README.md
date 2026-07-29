@@ -29,9 +29,9 @@
       ```Bash
       $ helm search repo celerdata
       NAME                                    CHART VERSION    APP VERSION  DESCRIPTION
-      celerdata/kube-celerdata      1.8.0            3.1-latest   kube-celerdata includes two subcharts, operator and celerdata
-      us-west1-docker.pkg.dev/phrasal-verve-350013/celerdata/operator            1.8.0            1.8.0        A Helm chart for CelerData operator
-      celerdata/celerdata           1.8.0            3.1-latest   A Helm chart for CelerData cluster
+      celerdata/kube-celerdata      1.11.6            4.1-latest   kube-celerdata includes two subcharts, operator and celerdata
+      celerdata/operator            1.11.6            1.11.6        A Helm chart for CelerData operator
+      celerdata/celerdata           1.11.6            4.1-latest   A Helm chart for CelerData cluster
       ```
 
 2. Use the default **[values.yaml](https://github.com/celerdata/phoenixai-kubernetes-operator/blob/main/helm-charts/charts/kube-celerdata/values.yaml)** of the Helm Chart to deploy the CelerData Operator and CelerData cluster, or create a YAML file to customize your deployment configurations.

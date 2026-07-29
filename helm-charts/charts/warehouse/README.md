@@ -23,11 +23,11 @@ topic describes how to use Helm to automatically deploy a CelerData warehouse on
     $ helm repo add celerdata https://celerdata.github.io/phoenixai-kubernetes-operator
     $ helm repo update celerdata
     $ helm search repo celerdata
-    NAME                                    CHART VERSION    APP VERSION  DESCRIPTION
-    celerdata/kube-celerdata      1.9.0            3.1-latest   kube-celerdata includes two subcharts, operator and celerdata
-    us-west1-docker.pkg.dev/phrasal-verve-350013/celerdata/operator            1.9.0            1.9.0        A Helm chart for CelerData operator
-    celerdata/celerdata           1.9.0            3.1-latest   A Helm chart for CelerData cluster
-    celerdata/warehouse           1.9.0            3.1-latest   A Helm chart for CelerData cluster
+    NAME                        CHART VERSION   APP VERSION   DESCRIPTION
+    celerdata/kube-celerdata    1.11.6          4.1-latest    kube-celerdata includes two subcharts, operator and celerdata
+    celerdata/operator          1.11.6          1.11.6        A Helm chart for CelerData operator
+    celerdata/celerdata         1.11.6          4.1-latest    A Helm chart for CelerData cluster
+    celerdata/warehouse         1.11.6          4.1-latest    A Helm chart for CelerData warehouse
     ```
 
 2. Prepare the values.yaml file.

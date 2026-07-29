@@ -1,0 +1,5 @@
+{
+  "label": "Scale",
+  "position": 3,
+  "link": { "type": "generated-index", "description": "Add and remove FE, BE, and CN nodes safely, manually or with HPA." }
+}

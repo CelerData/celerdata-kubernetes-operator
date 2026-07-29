@@ -1,0 +1,5 @@
+{
+  "label": "Explanation",
+  "position": 3,
+  "link": { "type": "generated-index", "description": "Background and design discussion: how the operator behaves and why, so you can reason about it." }
+}

@@ -1,0 +1,5 @@
+{
+  "label": "Reference",
+  "position": 4,
+  "link": { "type": "generated-index", "description": "Look-up material: CRD API, Helm charts, RBAC, storage classes, and log locations." }
+}
