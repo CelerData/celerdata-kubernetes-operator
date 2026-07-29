@@ -314,12 +314,15 @@ helm install -f ./celerdata-values.yaml -f override.yaml celerdata celerdata-com
 The detailed process of disaster recovery is as follows:
 
 1. The Operator will start a FE Pod and start the disaster recovery.
+
    ```bash
    kubectl get pods
    NAME                  READY   STATUS    RESTARTS        AGE
    kube-celerdata-fe-0   1/1     Running   0               4m37s
    ```
+
    If you check the status of the CelerDataCluster at this time, you will see:
+
    ```bash
    kubectl get cdc kube-celerdata -oyaml | less
    status:
@@ -332,6 +335,7 @@ The detailed process of disaster recovery is as follows:
    ```
 
 2. After the disaster recovery is complete, the Operator will automatically start other Pods.
+
    ```bash
    kubectl get pods
    NAME                  READY   STATUS    RESTARTS        AGE
@@ -340,7 +344,9 @@ The detailed process of disaster recovery is as follows:
    kube-celerdata-fe-1   1/1     Running   0               7m54s
    kube-celerdata-fe-2   1/1     Running   0               7m54s
    ```
+
    The cluster status is as follows:
+
    ```bash
    status:
      phase: running

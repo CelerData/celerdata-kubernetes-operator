@@ -88,6 +88,7 @@ From outside the Kubernetes cluster, you can access the CelerData cluster throug
 2. Run the command `kubectl -n celerdata port-forward service/celerdatacluster-sample-fe-service 9030:9030` to forward
    local port `9030` to FE Service's port `9030`.
 3. Access the CelerData cluster by using the MySQL client.
+
     ```bash
     mysql -h 127.0.0.1 -P9030 -uroot
     ```

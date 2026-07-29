@@ -52,11 +52,14 @@ kubectl apply -f https://raw.githubusercontent.com/celerdata/phoenixai-kubernete
 You can choose to deploy the CelerData Operator by using a default configuration file or a custom configuration file.
 
 1. **Deploy the CelerData Operator by using a default configuration file.**
+
    ```bash
    kubectl apply -f https://raw.githubusercontent.com/celerdata/phoenixai-kubernetes-operator/main/deploy/operator.yaml
    ```
+
    The CelerData Operator is deployed to the namespace `celerdata` and manages all CelerData clusters under all
    namespaces. After `operator.yaml` is applied, The following resources will be created:
+
     ```bash
     namespace/celerdata created
     serviceaccount/celerdata created
@@ -66,15 +69,19 @@ You can choose to deploy the CelerData Operator by using a default configuration
     rolebinding.rbac.authorization.k8s.io/celerdata-leader-election-rolebinding created
     deployment.apps/kube-celerdata-operator created
     ```
+
 2. **Deploy the CelerData Operator by using a custom configuration file.** By default, the Operator is configured to
    install in the celerdata namespace. To use the Operator in a custom namespace, download the Operator manifest and
    substitute all instances of namespace to your custom namespace.
     1. Download the configuration file **operator.yaml**, which is used to deploy the CelerData Operator.
+
        ```bash
        curl -O https://raw.githubusercontent.com/celerdata/phoenixai-kubernetes-operator/main/deploy/operator.yaml
        ```
+
     2. Modify the configuration file **operator.yaml** to suit your needs.
     3. Deploy the CelerData Operator.
+
        ```bash
        kubectl apply -f operator.yaml
        ```

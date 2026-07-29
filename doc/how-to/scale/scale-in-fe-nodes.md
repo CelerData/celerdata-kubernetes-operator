@@ -16,6 +16,7 @@ If users want to scale in the FE nodes, they should:
 1. Execute the `SHOW FRONTENDS` command to get the FE nodes information, and must choose the
    `kube-celerdata-fe-4.kube-celerdata-fe-search.default.svc.cluster.local` node with the highest ordinal to be removed
    first.
+
    ```sql
    mysql
    > show frontends;
@@ -31,6 +32,7 @@ If users want to scale in the FE nodes, they should:
    ```
 
 2. Drop the FE node from the CelerData cluster.
+
    ```sql
    mysql> ALTER SYSTEM DROP FOLLOWER "kube-celerdata-fe-4.kube-celerdata-fe-search.default.svc.cluster.local:9010";
    Query OK, 0 rows affected (0.22 sec)

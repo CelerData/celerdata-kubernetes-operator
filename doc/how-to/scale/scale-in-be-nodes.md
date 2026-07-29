@@ -27,6 +27,7 @@ example, if users want to scale in the BE nodes from 6 to 3, they should scale i
 1. Execute the `SHOW BACKENDS` command to get the BE nodes information, and must choose the
    `kube-celerdata-be-5.kube-celerdata-be-search.default.svc.cluster.local` node with the highest ordinal to be removed
    first.
+
    ```sql
    mysql
    > SHOW BACKENDS;
@@ -45,11 +46,13 @@ example, if users want to scale in the BE nodes from 6 to 3, they should scale i
 
 2. Set the `drop_backend_after_decommission` configuration to `false` to avoid automatic deletion of the backend after
    decommissioning.
+
    ```sql
    ADMIN SET FRONTEND CONFIG ("drop_backend_after_decommission" = "false");
    ```
 
 3. Execute the command to decommission the chosen BE node.
+
    ```sql
    ALTER SYSTEM DECOMMISSION BACKEND "kube-celerdata-be-5.kube-celerdata-be-search.default.svc.cluster.local:9050"
    ```
@@ -71,9 +74,12 @@ example, if users want to scale in the BE nodes from 6 to 3, they should scale i
    | 10312     | kube-celerdata-be-5.kube-celerdata-be-search.default.svc.cluster.local | 9050          | 9060   | 8040     | 8060     | 2025-10-17 04:13:24 | 2025-10-17 04:24:39 | true  | true                 | false                 | 0         | 0.000 B          | 75.850 GB     | 182.280 GB    | 58.39 % | 58.39 %        |        | 3.3.10-227b0b3 | {"lastSuccessReportTabletsTime":"2025-10-17 04:24:26"} | 75.850 GB         | 0.00 %      | 8        | 6.207GB  | 0                 | 2.85 %     | 0.2 %      | Status: Normal, DiskUsage: 0B/0B, MemUsage: 0B/0B |          |
    +-----------+------------------------------------------------------------------------+---------------+--------+----------+----------+---------------------+---------------------+-------+----------------------+-----------------------+-----------+------------------+---------------+---------------+---------+----------------+--------+----------------+--------------------------------------------------------+-------------------+-------------+----------+----------+-------------------+------------+------------+---------------------------------------------------+----------+
    ```
+
 5. Execute the `ALTER SYSTEM DROP BACKEND` command to drop the decommissioned BE node from the CelerData cluster.
+
    ```sql
    ALTER SYSTEM DROP BACKEND "kube-celerdata-be-5.kube-celerdata-be-search.default.svc.cluster.local:9050"
    ```
+
 6. Adjust the `replicas` field to a smaller number, e.g. 6-->5.
 7. Repeat the above steps to remove other BE nodes until the desired number of BE nodes is reached.
