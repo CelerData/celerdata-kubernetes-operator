@@ -178,8 +178,11 @@ Note: This only works for chart v1.8.4 and above.
 
 ## 3. Import CelerData Grafana Dashboard
 
-CelerData grafana dashboard configuration for kubernetes environment is available
-at https://github.com/celerdata/phoenixai-kubernetes-operator/blob/main/extra/grafana/kubernetes/CelerData-Overview-kubernetes-3.0.json
+The Grafana dashboard configuration for Kubernetes environments is available as
+[StarRocks-Overview-kubernetes-3.0.json](https://github.com/StarRocks/starrocks/blob/main/extra/grafana/kubernetes/StarRocks-Overview-kubernetes-3.0.json).
+
+It is published in the upstream StarRocks repository rather than this one, because the
+metrics it charts are exposed by the FE, BE, and CN processes themselves.
 
 Detailed instruction can be
 described in [Grafana's import-a-dashboard guide](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/#import-a-dashboard).
