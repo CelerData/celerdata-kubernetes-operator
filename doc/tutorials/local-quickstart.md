@@ -16,6 +16,11 @@ each component with no persistent storage, which is exactly what you don't want 
 cluster. Once you have the feel of it, the
 [how-to guides](../how-to/install/deploy-with-helm.md) cover real deployments.
 
+There is a fair amount of configuration in this document, and it is arranged with the step by
+step content at the beginning and the technical details at the end. Follow the steps first and
+watch it work; [what you just built](#what-you-just-built) explains the choices afterwards,
+when you have something concrete to attach them to.
+
 ## What you need
 
 | Resource | Minimum | Recommended |
@@ -288,6 +293,67 @@ kind delete cluster --name celerdata
 
 That removes the containers, the cluster, and the data. To keep the Kubernetes cluster but
 remove only the database, run `helm uninstall celerdata -n celerdata` instead.
+
+## What you just built
+
+You have a working cluster and a query returning rows. Now the parts worth understanding.
+
+### The two ports, and why kind needed configuring
+
+A `kind` cluster runs inside a Docker container, so its NodePorts are not reachable from your
+machine unless you forward them when the cluster is created — which is why step 1 came before
+everything else and cannot be added later without recreating the cluster.
+
+You forwarded two, and used both for different things:
+
+- **30002 → FE 9030**, the MySQL protocol port. This is the query path.
+- **30001 → FE Proxy 8080**, the HTTP path. This is the load path.
+
+### Why the load went through the FE Proxy
+
+Step 6 sent the CSV to port 30001, not to FE. Stream Load is a two-hop protocol: you POST to
+FE, and FE replies with an HTTP 307 redirect naming the BE that should receive the data. The
+address in that redirect is the BE's address *on the cluster's internal network*.
+
+From your laptop, that address does not resolve — so a direct Stream Load to FE fails after
+appearing to start. The FE Proxy is an nginx reverse proxy that follows the redirect from
+inside the cluster, where the address does resolve, and hands you back a single reachable
+endpoint. That is why `celerDataFeProxySpec.enabled: true` was in `values.yaml`, and why
+`--location-trusted` is in the `curl` command: it permits the client to follow the redirect
+with credentials attached.
+
+This is also the one part of the local setup that is not a toy — you would configure the FE
+Proxy the same way in production for any client outside the cluster network. See
+[Load data with Stream Load](../how-to/operate/load-data-with-stream-load.md).
+
+### Why `replication_num` is 1
+
+By default a table keeps three replicas of each tablet across different BE nodes. You have
+one BE node, so a request for three replicas can never be satisfied and the table would sit
+unhealthy. Setting `replication_num` to 1 matches the storage to the cluster. In a real
+cluster, leave it at the default — it is what survives losing a node.
+
+### What makes this unsuitable for production
+
+Three things, each fixed by a how-to guide:
+
+- **No persistent storage.** Every component wrote to an `emptyDir`, which exists only as
+  long as the pod. A restart would have lost the metadata, the data, and the logs — see
+  [Mount a persistent volume](../how-to/configure/mount-persistent-volume.md).
+- **No password on `root`.** Fine on a laptop, unacceptable anywhere else — see
+  [Initialize the root password](../how-to/configure/initialize-root-password.md).
+- **One FE node.** No metadata quorum, so no tolerance for losing it. Production clusters run
+  three, and note that you cannot later shrink three back to one — see
+  [Scaling behavior](../explanation/scaling-behavior.md).
+
+The resource limits you set are also deliberately small enough for a laptop and too small for
+real work. The chart's defaults are the starting point for a real cluster.
+
+### The images you did not override
+
+`values.yaml` set no image tags, only resources and services. That was intentional: the
+chart's default images are the ones matched to its version, so overriding them is how you get
+a component mismatch. Pin images when you have a reason to, not by habit.
 
 ## What next
 

@@ -7,8 +7,14 @@ description: "Walk through a shared-data cluster recovery end to end: snapshot, 
 
 # Recover a cluster from a snapshot
 
-Shared-data clusters support disaster recovery from CelerData 3.4.1 onward. See
-[Disaster recovery](../../explanation/disaster-recovery.md) for how the operator drives it.
+Shared-data clusters support disaster recovery from CelerData 3.4.1 onward. This guide walks
+the whole loop end to end: build a cluster, put data in it, snapshot it, destroy it, bring it
+back, and confirm the data survived.
+
+There is a lot in this document. The steps come first, in the order you would actually run
+them; [what the operator is doing behind them](#what-the-operator-is-doing) is at the end,
+once you have watched a recovery happen. Reading the state machine before you have seen the
+phases move is harder than reading it after.
 
 Inorder to keep it simple and easy for users to follow this document, we use the `kube-celerdata` Helm Chart to deploy.
 Please note:
@@ -375,3 +381,75 @@ You can turn off this feature to get a quicker startup with -A
 
 Database changed
 mysql >select * from source_wiki_edit
+```
+
+## What the operator is doing
+
+You have now watched a cluster come back from a snapshot. Here is the machinery underneath.
+
+### The two fields you set
+
+Recovery is driven by `spec.disasterRecovery`, and reported through
+`status.disasterRecoveryStatus`:
+
+```yaml
+spec:
+  disasterRecovery:
+    generation: 1
+    enabled: true
+
+status:
+  disasterRecoveryStatus:
+    phase: todo/doing/done
+    reason: ""
+    observedGeneration: 1
+    startTimestamp: xxx   # unix timestamp
+    endTimestamp: yyy     # unix timestamp
+```
+
+`generation` is the reason a recovery is a deliberate act rather than something that repeats
+on every reconcile. It is a counter you increment; `observedGeneration` records the last one
+the operator acted on. A recovery starts when `disasterRecoveryStatus` is empty or
+`observedGeneration < generation`. Once they match and the phase is `done`, the operator
+leaves the cluster alone — so the recovery manifest can stay applied without re-triggering.
+To recover again, increment `generation` again.
+
+Before starting, the operator also checks that `enabled` is true and that FE's configuration
+puts the cluster in shared-data mode. Recovery only makes sense when the data is in object
+storage rather than on the BE nodes.
+
+### Why only FE restarts
+
+During recovery the operator pauses reconciliation of BE and CN entirely. Nothing is
+recovered onto them, because in shared-data mode they hold no authoritative data — the
+snapshot restores FE's metadata, and the data itself is already in object storage.
+
+For FE, the operator rewrites the StatefulSet:
+
+- **One replica.** Restoring metadata into several FE nodes at once would leave them
+  disagreeing about what was restored.
+- **`RESTORE_CLUSTER_GENERATION` and `RESTORE_CLUSTER_SNAPSHOT` injected.** The first tells
+  the pod which generation it belongs to, so a pod from a previous attempt is not mistaken
+  for this one. The second is what actually triggers FE's restore.
+- **Startup and liveness probes removed.** Restoring can take a long time, and a liveness
+  probe would decide the container had hung and kill it partway through.
+- **The readiness probe changed** from an HTTP request on 8030 to a connection check on 9030,
+  which is the earliest reliable signal that FE has finished restoring.
+
+That probe swap is why the mounted `cluster_snapshot.yaml` matters: the operator checks it is
+present — matching on the `SubPath` field — before it will start, because without it FE has
+nothing to restore from.
+
+Once the FE pod is ready, the operator restores the normal StatefulSet from your
+`CelerDataCluster` spec and resumes BE and CN.
+
+### Reading the phase
+
+`disasterRecoveryStatus.phase` moves `todo` → `doing` → `done`. It enters `todo` when the
+operator first notices the request, `doing` once the modified StatefulSet is applied, and
+`done` after the FE pod reports ready and belongs to the current generation. Time spent in
+`doing` is the restore itself, so on a large cluster expect to sit there a while — that is
+the phase to watch, and `reason` is where a failure explains itself.
+
+For the same material without the procedure wrapped around it, see
+[Disaster recovery](../../explanation/disaster-recovery.md).

@@ -7,9 +7,13 @@ description: Decommission BE nodes in a shared-nothing cluster correctly, and re
 
 # Scale in BE nodes
 
-Applies to `shared-nothing` clusters. Reducing `replicas` on its own deletes the highest
-ordinal pods immediately and loses their data — see
-[Scaling behavior](../../explanation/scaling-behavior.md). Decommission first.
+Applies to `shared-nothing` clusters. **Decommission each node before you reduce
+`replicas`** — lowering `replicas` on its own deletes pods immediately and takes their data
+with them.
+
+If you have already scaled in the wrong way, start with the recovery below; it usually
+works. The correct procedure follows it, and [why the two differ](#why-decommissioning-first-matters)
+is at the end.
 
 ## Recover from an incorrect scale-in
 
@@ -83,3 +87,33 @@ example, if users want to scale in the BE nodes from 6 to 3, they should scale i
 
 6. Adjust the `replicas` field to a smaller number, e.g. 6-->5.
 7. Repeat the above steps to remove other BE nodes until the desired number of BE nodes is reached.
+
+## Why decommissioning first matters
+
+Having run through it, here is what the extra steps buy you.
+
+The operator does not implement CelerData's documented scale-in procedure. When you lower
+`replicas`, it does one thing: it lowers `replicas` on the StatefulSet. Kubernetes then
+deletes the highest-ordinal pods right away. Nothing tells the cluster those nodes are
+leaving, so no one redistributes their tablets first — and in a `shared-nothing` cluster the
+data lives on the nodes, so whatever was only on them is gone.
+
+`ALTER SYSTEM DECOMMISSION BACKEND` is what makes the difference. It tells the cluster to
+move that node's tablets elsewhere while the node is still running and reachable. Waiting
+for `TabletNum` to reach 0 is how you know the move finished; that is why the procedure has
+you re-run `SHOW BACKENDS` and check rather than proceeding on a timer. Only once the node
+holds nothing is deleting its pod safe.
+
+Setting `drop_backend_after_decommission` to `false` keeps the node registered after it
+drains, so you can verify the drain before committing. With the default, the cluster drops
+the node itself and you lose the chance to check.
+
+**Why the recovery works at all:** the operator deletes pods but leaves their
+PersistentVolumeClaims behind. Raising `replicas` back to the original count gives
+Kubernetes the same pod names, which bind to those same surviving PVCs, and the data comes
+back with them. That is a safety net rather than a design — it fails if the PVCs were
+reclaimed, or if the cluster has already rebalanced around the loss. Do not rely on it.
+
+Shared-data clusters are not affected, because the data is in object storage rather than on
+the nodes. For the FE side of this and the broader picture, see
+[Scaling behavior](../../explanation/scaling-behavior.md).

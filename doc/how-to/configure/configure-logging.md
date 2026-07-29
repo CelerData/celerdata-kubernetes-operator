@@ -7,8 +7,13 @@ description: Persist component logs on a volume, send them to the console, or sh
 
 # Configure logging
 
-By default logs are written to an `emptyDir` and lost on pod restart
-([why](../../explanation/logging.md)). This guide covers the three ways to change that.
+By default, component logs go to an `emptyDir` volume, which means **a pod restart takes the
+logs with it** — exactly when you most want to read them. This guide covers the three ways
+to change that: persist logs on a volume, send them to the container console, or ship them
+to Datadog.
+
+Pick one and follow it; [how the three compare, and why the default behaves this
+way](#how-these-three-compare) is at the end.
 
 ## 3. Persisting Logs
 
@@ -108,3 +113,36 @@ celerDataFeSpec:
 ## 5. Collecting Logs into Datadog
 
 Refer to: [Datadog](../integration/integrate-datadog.md).
+
+## How these three compare
+
+Now that you have configured one, here is the trade-off you picked.
+
+The default is `emptyDir`: a directory created when the pod starts and destroyed when it
+stops. It costs nothing and needs no storage class, which is why it is the default, but its
+lifetime is the pod's lifetime. When a container crashes and restarts, the logs describing
+the crash are already gone.
+
+**Persisting logs** on a PersistentVolume decouples the logs from the pod. The operator
+creates a PVC per volume, so the logs survive restarts, rescheduling, and node failure. The
+cost is a volume per component — and for FE, note that `storageSize` covers metadata while
+`logStorageSize` covers logs. Keep FE metadata at 10 GB or more: the FE container stops if
+free space on the metadata volume falls below 5 GB, which turns a full log volume into an
+outage if you share them.
+
+**Logging to the console** with `LOG_CONSOLE=1` writes to stdout instead of files, which
+puts the logs where every Kubernetes tool already looks — `kubectl logs`, and `kubectl logs
+-p` for the generation before a restart. That `-p` is the entire benefit over the default.
+It is one generation back, retained by the container runtime and rotated on its schedule,
+not yours. Good for interactive debugging, not for an audit trail.
+
+**Shipping to Datadog** is the option that survives the cluster rather than just the pod,
+and it is the only one that gives you search and alerting across components. It also means
+your logs leave the cluster, with whatever that implies for retention cost and data
+handling.
+
+These are not exclusive. Console plus a collector is a common pairing: the collector does
+the durable copy, and `kubectl logs` stays useful for a quick look.
+
+For where each component writes its files, see
+[Log file locations](../../reference/log-file-locations.md).

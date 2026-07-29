@@ -7,10 +7,19 @@ description: Drive CN node count from CPU and memory usage with a Horizontal Pod
 
 # Autoscale CN nodes with HPA
 
-This document describes how to implement Horizontal Pod Autoscaler (HPA) based dynamic scaling for CN (Compute Node) nodes in CelerData clusters using Helm Charts. This feature was introduced in v1.11.0 and addresses critical autoscaling issues including resource cleanup, version compatibility, and graceful scaling operations.
+Drive CN node count from CPU and memory usage with a Kubernetes Horizontal Pod Autoscaler,
+configured through the Helm charts. Requires operator v1.11.0 or later.
 
-See [CN node autoscaling](../../explanation/cn-autoscaling.md) for the background and for
-which of the two shapes below to pick.
+There are two ways to arrange this, and the choice matters more than anything else on this
+page:
+
+- **Method 1 — one cluster with CN nodes.** Simplest. Use it unless you need the second.
+- **Method 2 — a cluster plus separate warehouses.** Each warehouse scales on its own, so
+  different workloads do not compete. Enterprise feature.
+
+Pick one, follow it, then read [why CN is the tier that
+autoscales](#why-cn-nodes-and-not-be-nodes) at the end — it explains what you can safely
+expect from the autoscaler and what it will not do for you.
 
 ## Prerequisites
 
@@ -348,3 +357,41 @@ mysql> show compute nodes \G;
         ComputeNodeId: 10010
                    IP: wh-1-warehouse-cn-0.wh-1-warehouse-cn-search.default.svc.cluster.local
                    ....
+```
+
+## Why CN nodes and not BE nodes
+
+With an autoscaler running, here is why it is attached to CN and what that implies.
+
+**CN is the stateless tier.** CN nodes process queries; they do not own data. A shared-data
+cluster keeps its data in object storage, so adding a CN node gives you more compute
+immediately, with no rebalancing, and removing one costs nothing but the queries in flight.
+BE nodes are the opposite: in a shared-nothing cluster the data lives on them, so removing
+one means draining its tablets first — a slow, deliberate operation that has to be done a
+node at a time (see [Scale in BE nodes](./scale-in-be-nodes.md)). That is not something you
+want a controller doing automatically in response to a CPU spike, which is why nothing here
+autoscales BE.
+
+**Registration is the part that needs coordinating.** A CN node is not useful the moment its
+pod is `Running` — it has to register with FE first, and on the way out it has to deregister
+so FE stops routing work to a node that is about to disappear. Before v1.11.0 the operator
+and the HPA both tried to manage `replicas` and fought over it; the operator now leaves
+`replicas` to the HPA when an autoscaling policy is set, and handles registration around what
+the HPA decides. This is also why deleting a policy properly removes the HPA object rather
+than orphaning it, and why the chart selects an `autoscaling/v2`, `v2beta2`, or `v1` API
+version to match your cluster.
+
+**Scaling in is graceful but not instant.** A node being removed finishes its in-flight work
+and deregisters before its pod goes away, and its PVC is cleaned up after. `SHOW COMPUTE
+NODES` can therefore still list a node briefly after the pod is gone — that is the
+deregistration completing, not a leak, and it settles on its own.
+
+**What the autoscaler cannot do.** It reacts to CPU and memory, so it follows load rather
+than anticipating it; a burst is served by the nodes you already have while new ones start.
+It cannot help a query that is slow for a reason other than compute — a bad join order or a
+missing index does not improve with more CN nodes. And it needs `metrics-server`: without it
+the HPA has no metrics, reports `<unknown>` for utilization, and does nothing at all. That is
+the first thing to check when scaling does not happen.
+
+For the same background without the procedures, see
+[CN node autoscaling](../../explanation/cn-autoscaling.md).

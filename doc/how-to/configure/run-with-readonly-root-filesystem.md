@@ -7,12 +7,15 @@ description: Configure FE and BE to start when readOnlyRootFilesystem is true, w
 
 # Run with a read-only root filesystem
 
-Setting `readOnlyRootFilesystem: true` stops the components from starting, because they
-write into their own install directories. The fix is to copy the install tree onto a
-mounted volume at startup — see
-[Read-only root filesystem](../../explanation/readonly-root-filesystem.md) for the detail.
+Setting `readOnlyRootFilesystem: true` on its own stops FE and BE from starting: they write
+into their own install directories, and a read-only root denies that. The fix is to mount a
+writable volume, copy the install tree into it at startup, and point `STARROCKS_ROOT` there.
 
 Requires operator and chart version v1.9.9 or later.
+
+Both approaches below produce the same result — pick the one matching how you deploy. There
+is a lot of YAML here and most of it is load-bearing, so [what these settings are actually
+doing](#what-these-settings-do) is spelled out at the end rather than in comments.
 
 There are two ways to deploy CelerData cluster:
 
@@ -243,3 +246,37 @@ celerdata:
       sys_log_dir = /opt/starrocks-log
       spill_local_storage_dir = /opt/starrocks-spill
 ```
+
+## What these settings do
+
+The manifests above are long. Here is what each moving part is for, now that you have one
+applied.
+
+**Why it fails without this.** `readOnlyRootFilesystem: true` is a good default — a
+compromised process cannot rewrite its own binaries. But FE and BE both write inside their
+install trees: FE creates `plugins/` and `temp_dir/`, writes `fe.pid` into `bin/`, and
+resolves `conf/fe.conf` through a symlink; BE creates `spill/`, writes `be.pid`, and
+populates `lib/jdbc_drivers`, `lib/small_file`, `lib/udf`, and `lib/udf-runtime`. All of
+that lands on the root filesystem, so all of it is denied.
+
+**The copy-at-startup trick.** The `emptyDir` mounted at `/opt/starrocks-artifacts` is
+writable even when the root is not. The `entrypoint`/`args` override copies the whole
+install tree into it, then executes the real entrypoint from there. Setting `STARROCKS_ROOT`
+to that path is what makes the component treat the copy as its home. The root filesystem
+stays read-only; the component gets somewhere to write.
+
+**Why the volume names are fixed.** `fe-meta`, `fe-log`, `be-storage`, and `be-log` are the
+names the operator looks for when wiring up metadata, data, and log storage — the `# must be
+this` comments are not stylistic. Rename them and the operator will not recognise them.
+
+**Why the ConfigMaps are mandatory here.** The defaults point FE's metadata and log
+directories, and BE's `storage_root_path`, at paths inside the install tree — which is now a
+throwaway copy on an `emptyDir`. The `meta_dir`, `sys_log_dir`, `audit_log_dir`, and
+`storage_root_path` overrides move them onto the persistent volumes. Skip this and the
+cluster starts, appears healthy, and loses its metadata and data on the next restart. That
+failure is much worse than not starting at all, which is why the config override is part of
+the procedure rather than an optional extra.
+
+Note the asymmetry in the `emptyDir` sizes: `/opt/starrocks-artifacts` only holds a copy of
+the install tree, while the metadata, data, and log volumes hold state that has to outlive
+the pod.
