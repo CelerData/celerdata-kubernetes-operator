@@ -1,7 +1,7 @@
 ---
 title: Initialize the root password
 sidebar_label: Initialize root password
-sidebar_position: 6
+sidebar_position: 7
 description: Set the root password at install time with the Helm chart, in plain text or from a Secret.
 ---
 

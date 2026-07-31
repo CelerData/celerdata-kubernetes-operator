@@ -1,7 +1,7 @@
 ---
 title: Change the root password
 sidebar_label: Change root password
-sidebar_position: 7
+sidebar_position: 8
 description: Change the root password on a running cluster and keep the operator able to authenticate.
 ---
 

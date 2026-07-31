@@ -1,7 +1,7 @@
 ---
 title: Run with a read-only root filesystem
 sidebar_label: Read-only root filesystem
-sidebar_position: 8
+sidebar_position: 9
 description: Configure FE and BE to start when readOnlyRootFilesystem is true, with the CRD or with Helm.
 ---
 

@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-    version: v1.11.6
+    version: v1.11.7
   name: celerdataclusters.celerdata.com
 spec:
   group: celerdata.com
@@ -1979,6 +1979,27 @@ spec:
                   storageVolumes:
                     items:
                       properties:
+                        csi:
+                          properties:
+                            driver:
+                              type: string
+                            fsType:
+                              type: string
+                            nodePublishSecretRef:
+                              properties:
+                                name:
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            readOnly:
+                              type: boolean
+                            volumeAttributes:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          required:
+                          - driver
+                          type: object
                         hostPath:
                           properties:
                             path:
@@ -1993,6 +2014,8 @@ spec:
                         name:
                           pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                           type: string
+                        readOnly:
+                          type: boolean
                         storageClassName:
                           type: string
                         storageSize:
@@ -4370,6 +4393,27 @@ spec:
                   storageVolumes:
                     items:
                       properties:
+                        csi:
+                          properties:
+                            driver:
+                              type: string
+                            fsType:
+                              type: string
+                            nodePublishSecretRef:
+                              properties:
+                                name:
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            readOnly:
+                              type: boolean
+                            volumeAttributes:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          required:
+                          - driver
+                          type: object
                         hostPath:
                           properties:
                             path:
@@ -4384,6 +4428,8 @@ spec:
                         name:
                           pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                           type: string
+                        readOnly:
+                          type: boolean
                         storageClassName:
                           type: string
                         storageSize:
@@ -5090,6 +5136,27 @@ spec:
                   storageVolumes:
                     items:
                       properties:
+                        csi:
+                          properties:
+                            driver:
+                              type: string
+                            fsType:
+                              type: string
+                            nodePublishSecretRef:
+                              properties:
+                                name:
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            readOnly:
+                              type: boolean
+                            volumeAttributes:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          required:
+                          - driver
+                          type: object
                         hostPath:
                           properties:
                             path:
@@ -5104,6 +5171,8 @@ spec:
                         name:
                           pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                           type: string
+                        readOnly:
+                          type: boolean
                         storageClassName:
                           type: string
                         storageSize:
@@ -7119,6 +7188,27 @@ spec:
                   storageVolumes:
                     items:
                       properties:
+                        csi:
+                          properties:
+                            driver:
+                              type: string
+                            fsType:
+                              type: string
+                            nodePublishSecretRef:
+                              properties:
+                                name:
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            readOnly:
+                              type: boolean
+                            volumeAttributes:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          required:
+                          - driver
+                          type: object
                         hostPath:
                           properties:
                             path:
@@ -7133,6 +7223,8 @@ spec:
                         name:
                           pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                           type: string
+                        readOnly:
+                          type: boolean
                         storageClassName:
                           type: string
                         storageSize:

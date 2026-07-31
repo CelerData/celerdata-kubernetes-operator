@@ -1,7 +1,7 @@
 ---
 title: Override component configuration files
 sidebar_label: Override component config
-sidebar_position: 4
+sidebar_position: 5
 description: Replace the default fe.conf, be.conf, or cn.conf shipped in the images by using a ConfigMap.
 ---
 

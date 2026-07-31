@@ -3,6 +3,28 @@ entries:
   celerdata:
   - apiVersion: v2
     appVersion: 4.1-latest
+    created: "2026-07-31T17:00:19.552748+08:00"
+    description: A Helm chart for CelerData cluster
+    digest: 4ddd33e9cee1b98063a826959323b16a2d65f3eeda5b264411dfc45e26a57e3b
+    home: https://github.com/celerdata/phoenixai-kubernetes-operator
+    keywords:
+    - operator
+    - celerdata
+    - database
+    - olap
+    kubeVersion: '>=1.23.0-0'
+    maintainers:
+    - email: ray.yan@celerdata.com
+      name: Ray Yan
+    name: celerdata
+    sources:
+    - https://github.com/CelerData/celerdata-enterprise
+    type: application
+    urls:
+    - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.7/celerdata-1.11.7.tgz
+    version: 1.11.7
+  - apiVersion: v2
+    appVersion: 4.1-latest
     created: "2026-07-15T14:59:02.424843+08:00"
     description: A Helm chart for CelerData cluster
     digest: 177e49de2896a8b13dd0eddcd266906d152dae8280e2d1961c29a3f376debcd8
@@ -68,6 +90,35 @@ entries:
     - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.4/celerdata-1.11.4.tgz
     version: 1.11.4
   kube-celerdata:
+  - apiVersion: v2
+    appVersion: 4.1-latest
+    created: "2026-07-31T17:00:14.656302+08:00"
+    dependencies:
+    - name: operator
+      repository: file://charts/operator
+      version: 1.11.7
+    - name: celerdata
+      repository: file://charts/celerdata
+      version: 1.11.7
+    description: kube-celerdata includes two subcharts, operator and celerdata
+    digest: 05b579c82546c58413e89cf18039752b1582c6c4b243d5ac246c1f25dd62ba41
+    home: https://github.com/celerdata/phoenixai-kubernetes-operator
+    keywords:
+    - operator
+    - celerdata
+    - database
+    - olap
+    kubeVersion: '>=1.23.0-0'
+    maintainers:
+    - email: ray.yan@celerdata.com
+      name: Ray Yan
+    name: kube-celerdata
+    sources:
+    - https://github.com/CelerData/celerdata-enterprise
+    type: application
+    urls:
+    - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.7/kube-celerdata-1.11.7.tgz
+    version: 1.11.7
   - apiVersion: v2
     appVersion: 4.1-latest
     created: "2026-07-15T14:58:57.668681+08:00"
@@ -157,6 +208,28 @@ entries:
     version: 1.11.4
   operator:
   - apiVersion: v2
+    appVersion: 1.11.7
+    created: "2026-07-31T17:00:17.042993+08:00"
+    description: A Helm chart for CelerData operator
+    digest: 3956b9e40d263c53ed1c591c569a791a6deb31269addc7deba57eb26677feb28
+    home: https://github.com/celerdata/phoenixai-kubernetes-operator
+    keywords:
+    - operator
+    - celerdata
+    - database
+    - olap
+    kubeVersion: '>=1.23.0-0'
+    maintainers:
+    - email: ray.yan@celerdata.com
+      name: Ray Yan
+    name: operator
+    sources:
+    - https://github.com/CelerData/celerdata-enterprise
+    type: application
+    urls:
+    - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.7/operator-1.11.7.tgz
+    version: 1.11.7
+  - apiVersion: v2
     appVersion: 1.11.6
     created: "2026-07-15T14:59:00.005276+08:00"
     description: A Helm chart for CelerData operator
@@ -223,6 +296,29 @@ entries:
     - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.4/operator-1.11.4.tgz
     version: 1.11.4
   warehouse:
+  - apiVersion: v2
+    appVersion: 4.1-latest
+    created: "2026-07-31T17:00:22.004655+08:00"
+    description: Warehouse is currently a feature of the CelerData Enterprise Edition.
+    digest: 41ca7ac0b411a16de9df9026ef7d43e353ffd8579c114bdeea9d357f0e843b29
+    home: https://github.com/celerdata/phoenixai-kubernetes-operator
+    keywords:
+    - operator
+    - celerdata
+    - database
+    - olap
+    - multi-warehouse
+    kubeVersion: '>=1.23.0-0'
+    maintainers:
+    - email: ray.yan@celerdata.com
+      name: Ray Yan
+    name: warehouse
+    sources:
+    - https://github.com/CelerData/celerdata-enterprise
+    type: application
+    urls:
+    - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.7/warehouse-1.11.7.tgz
+    version: 1.11.7
   - apiVersion: v2
     appVersion: 4.1-latest
     created: "2026-07-15T14:59:04.90221+08:00"
@@ -292,4 +388,4 @@ entries:
     urls:
     - https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.4/warehouse-1.11.4.tgz
     version: 1.11.4
-generated: "2026-07-15T14:59:04.901537+08:00"
+generated: "2026-07-31T17:00:22.004014+08:00"

@@ -15,14 +15,14 @@ K8S_VERSION="v1.23.4"
 HELM_URL="https://get.helm.sh"
 KIND_URL="https://kind.sigs.k8s.io/dl/v0.20.0"
 KUBECTL_URL="https://dl.k8s.io/release/v1.28.3/bin"
-HELM_CHART_URL="https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.6/kube-celerdata-1.11.6.tgz"
+HELM_CHART_URL="https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.7/kube-celerdata-1.11.7.tgz"
 # NOTE:
 # if you can not access the following url, you can try to use the following url.
 # And you can specify the url by command arguments.
 # HELM_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com"
 # KIND_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com"
 # KUBECTL_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com"
-# HELM_CHART_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com/kube-celerdata-1.11.6.tgz"
+# HELM_CHART_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com/kube-celerdata-1.11.7.tgz"
 
 # checkBinary checks if the binary is installed. If not, return 1, else return 0
 function checkBinary() {

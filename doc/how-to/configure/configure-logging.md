@@ -1,7 +1,7 @@
 ---
 title: Configure logging
 sidebar_label: Configure logging
-sidebar_position: 5
+sidebar_position: 6
 description: Persist component logs on a volume, send them to the console, or ship them to Datadog.
 ---
 

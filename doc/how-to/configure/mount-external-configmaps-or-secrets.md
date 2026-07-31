@@ -1,7 +1,7 @@
 ---
 title: Mount external ConfigMaps or Secrets
 sidebar_label: Mount ConfigMaps or Secrets
-sidebar_position: 3
+sidebar_position: 4
 description: Mount extra ConfigMaps and Secrets into component pods, optionally at a subPath.
 ---
 
