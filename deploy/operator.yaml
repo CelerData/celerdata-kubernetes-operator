@@ -168,7 +168,7 @@ spec:
         kubectl.kubernetes.io/default-container: manager
       labels:
         app: kube-celerdata-operator
-        version: 1.11.6
+        version: 1.11.7
     spec:
       automountServiceAccountToken: true
       containers:
@@ -179,10 +179,11 @@ spec:
         - --zap-time-encoding=iso8601
         - --zap-encoder=console
         - --volume-name-with-hash=true
+        - --fe-ssl-mode=PREFERRED
         env:
         - name: TZ
           value: Asia/Shanghai
-        image: "us-west1-docker.pkg.dev/phrasal-verve-350013/celerdata/operator:v1.11.6"
+        image: "us-west1-docker.pkg.dev/phrasal-verve-350013/celerdata/operator:v1.11.7"
         imagePullPolicy: Always
         name: manager
         securityContext:

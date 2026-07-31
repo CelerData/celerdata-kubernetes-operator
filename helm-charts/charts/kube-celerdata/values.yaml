@@ -43,7 +43,7 @@ operator:
     image:
       # image sliced by "repository:tag"
       repository: us-west1-docker.pkg.dev/phrasal-verve-350013/celerdata/operator
-      tag: v1.11.6
+      tag: v1.11.7
     imagePullPolicy: Always
     replicaCount: 1
     resources:
@@ -102,6 +102,19 @@ operator:
     # any resources in it. Avoid configuring conflicting values between these two settings.
     # Example: "kube-system,kube-public,monitoring"
     denyList: ""
+    # How the operator's MySQL connection to FE negotiates TLS. Mirrors the MySQL client's
+    # --ssl-mode option:
+    #   DISABLED  - always plaintext. An FE with ssl_force_secure_transport=true rejects the
+    #               connection with error 5205 and logs a warning for every attempt.
+    #   PREFERRED - (default) encrypt when FE advertises SSL support, stay plaintext when it does
+    #               not, so a cluster without SSL configured behaves exactly as before.
+    #   REQUIRED  - always encrypt, and fail the connection when FE does not support SSL. Use this
+    #               to guarantee the operator never talks to FE in plaintext.
+    # The server certificate is never verified: the keystore FE's documentation generates is
+    # self-signed, so there is no CA to chain to and its name does not match FE's in-cluster
+    # service DNS name. Leave empty to use the operator's built-in default. Changing this value
+    # restarts the operator pod.
+    feSslMode: PREFERRED
     # Additional operator container environment variables
     # You specify this manually like you would a raw deployment manifest.
     # Ref: https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
@@ -522,6 +535,20 @@ celerdata:
       #     path: /tmp
       #     type: Directory
       #   mountPath: /tmp
+    # mount CSI ephemeral inline volumes if necessary.
+    # Unlike storageSpec, no PersistentVolumeClaim is created: the volume is published by the CSI
+    # driver when the pod starts and is torn down with the pod. The driver must already be installed
+    # in the cluster.
+    csiVolumes: []
+      # e.g., mount the SPIFFE workload API socket provided by the SPIFFE CSI driver
+      # - name: spiffe-workload-api
+      #   mountPath: /spiffe-workload-api
+      #   # readOnly here mounts it read-only inside the container; csi.readOnly below asks the
+      #   # driver to publish the volume read-only. Set both for a genuinely read-only mount.
+      #   readOnly: true
+      #   csi:
+      #     driver: csi.spiffe.io
+      #     readOnly: true
     # persistentVolumeClaimRetentionPolicy specifies the retention policy for PersistentVolumeClaims associated with the component.
     # The whenDeleted field is supported for all components, and it determines whether to delete PVCs when the StatefulSet is deleted.
     #	The whenScaled field is only supported for the CN component.
@@ -896,6 +923,20 @@ celerdata:
       #     path: /tmp
       #     type: Directory
       #   mountPath: /tmp
+    # mount CSI ephemeral inline volumes if necessary.
+    # Unlike storageSpec, no PersistentVolumeClaim is created: the volume is published by the CSI
+    # driver when the pod starts and is torn down with the pod. The driver must already be installed
+    # in the cluster.
+    csiVolumes: []
+      # e.g., mount the SPIFFE workload API socket provided by the SPIFFE CSI driver
+      # - name: spiffe-workload-api
+      #   mountPath: /spiffe-workload-api
+      #   # readOnly here mounts it read-only inside the container; csi.readOnly below asks the
+      #   # driver to publish the volume read-only. Set both for a genuinely read-only mount.
+      #   readOnly: true
+      #   csi:
+      #     driver: csi.spiffe.io
+      #     readOnly: true
     # persistentVolumeClaimRetentionPolicy specifies the retention policy for PersistentVolumeClaims associated with the component.
     # The whenDeleted field is supported for all components, and it determines whether to delete PVCs when the StatefulSet is deleted.
     #	The whenScaled field is only supported for the CN component.
@@ -1233,6 +1274,20 @@ celerdata:
       #     path: /tmp
       #     type: Directory
       #   mountPath: /tmp
+    # mount CSI ephemeral inline volumes if necessary.
+    # Unlike storageSpec, no PersistentVolumeClaim is created: the volume is published by the CSI
+    # driver when the pod starts and is torn down with the pod. The driver must already be installed
+    # in the cluster.
+    csiVolumes: []
+      # e.g., mount the SPIFFE workload API socket provided by the SPIFFE CSI driver
+      # - name: spiffe-workload-api
+      #   mountPath: /spiffe-workload-api
+      #   # readOnly here mounts it read-only inside the container; csi.readOnly below asks the
+      #   # driver to publish the volume read-only. Set both for a genuinely read-only mount.
+      #   readOnly: true
+      #   csi:
+      #     driver: csi.spiffe.io
+      #     readOnly: true
     # persistentVolumeClaimRetentionPolicy specifies the retention policy for PersistentVolumeClaims associated with the component.
     # The whenDeleted field is supported for all components, and it determines whether to delete PVCs when the StatefulSet is deleted.
     #	The whenScaled field is only supported for the CN component.
