@@ -249,7 +249,7 @@ spec:
     configMapInfo:
       configMapName: {{ template  "celerdatacluster.fe.configmap.name" . }}
       resolveKey: fe.conf
-    {{- if or .Values.celerDataFeSpec.storageSpec.name .Values.celerDataFeSpec.emptyDirs .Values.celerDataFeSpec.hostPaths }}
+    {{- if or .Values.celerDataFeSpec.storageSpec.name .Values.celerDataFeSpec.emptyDirs .Values.celerDataFeSpec.hostPaths .Values.celerDataFeSpec.csiVolumes }}
     storageVolumes:
     {{- if .Values.celerDataFeSpec.storageSpec.name }}
     - name: {{ .Values.celerDataFeSpec.storageSpec.name }}{{ template "celerdatacluster.fe.meta.suffix" . }}
@@ -270,6 +270,9 @@ spec:
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
       storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
     {{- end }}
     {{- end }}
     {{- if .Values.celerDataFeSpec.hostPaths }}
@@ -277,8 +280,23 @@ spec:
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
       storageClassName: "hostPath"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
       hostPath:
         {{- toYaml .hostPath | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.celerDataFeSpec.csiVolumes }}
+    {{- range .Values.celerDataFeSpec.csiVolumes }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "csi"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      csi:
+        {{- toYaml .csi | nindent 8 }}
     {{- end }}
     {{- end }}
     {{- end }}
@@ -527,7 +545,7 @@ spec:
     configMapInfo:
       configMapName: {{template "celerdatacluster.be.configmap.name" . }}
       resolveKey: be.conf
-    {{- if or .Values.celerDataBeSpec.storageSpec.name .Values.celerDataBeSpec.emptyDirs .Values.celerDataBeSpec.hostPaths }}
+    {{- if or .Values.celerDataBeSpec.storageSpec.name .Values.celerDataBeSpec.emptyDirs .Values.celerDataBeSpec.hostPaths .Values.celerDataBeSpec.csiVolumes }}
     storageVolumes:
     {{- if .Values.celerDataBeSpec.storageSpec.name }}
     {{- if gt (int .Values.celerDataBeSpec.storageSpec.storageCount) 1 }}
@@ -569,6 +587,9 @@ spec:
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
       storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
     {{- end }}
     {{- end }}
     {{- if .Values.celerDataBeSpec.hostPaths }}
@@ -576,8 +597,23 @@ spec:
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
       storageClassName: "hostPath"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
       hostPath:
         {{- toYaml .hostPath | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.celerDataBeSpec.csiVolumes }}
+    {{- range .Values.celerDataBeSpec.csiVolumes }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "csi"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      csi:
+        {{- toYaml .csi | nindent 8 }}
     {{- end }}
     {{- end }}
     {{- end }}
@@ -834,7 +870,7 @@ spec:
     configMapInfo:
       configMapName: {{template  "celerdatacluster.cn.configmap.name" . }}
       resolveKey: cn.conf
-    {{- if or .Values.celerDataCnSpec.storageSpec.name .Values.celerDataCnSpec.emptyDirs .Values.celerDataCnSpec.hostPaths }}
+    {{- if or .Values.celerDataCnSpec.storageSpec.name .Values.celerDataCnSpec.emptyDirs .Values.celerDataCnSpec.hostPaths .Values.celerDataCnSpec.csiVolumes }}
     storageVolumes:
     {{- if .Values.celerDataCnSpec.storageSpec.name }}
     {{- if gt (int .Values.celerDataCnSpec.storageSpec.storageCount) 1 }}
@@ -876,6 +912,9 @@ spec:
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
       storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
     {{- end }}
     {{- end }}
     {{- if .Values.celerDataCnSpec.hostPaths }}
@@ -883,8 +922,23 @@ spec:
     - name: {{ .name }}
       mountPath: {{ .mountPath }}
       storageClassName: "hostPath"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
       hostPath:
         {{- toYaml .hostPath | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.celerDataCnSpec.csiVolumes }}
+    {{- range .Values.celerDataCnSpec.csiVolumes }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "csi"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      csi:
+        {{- toYaml .csi | nindent 8 }}
     {{- end }}
     {{- end }}
     {{- end }}
@@ -958,6 +1012,9 @@ spec:
     {{- range .Values.celerDataFeProxySpec.emptyDirs }}
     - name: {{ .name }}
       storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
       mountPath: {{ .mountPath }}
     {{- end }}
     {{- end }}

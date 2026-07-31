@@ -47,6 +47,9 @@ spec:
         {{- if .Values.celerDataOperator.denyList }}
         - --deny-list={{ .Values.celerDataOperator.denyList }}
         {{- end }}
+        {{- if .Values.celerDataOperator.feSslMode }}
+        - --fe-ssl-mode={{ .Values.celerDataOperator.feSslMode }}
+        {{- end }}
         env:
         - name: TZ
           value: {{ .Values.timeZone }}
