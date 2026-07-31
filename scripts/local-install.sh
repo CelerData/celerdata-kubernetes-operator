@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This script is used to install celerdata on local k8s cluster.
-# Make sure `docker` is installed，See [install docker](https://github.com/celerdata/phoenixai-kubernetes-operator/blob/main/doc/local_installation_how_to.md#11-install-docker) for more details.
+# Make sure `docker` is installed，See [install docker](https://github.com/celerdata/phoenixai-kubernetes-operator/blob/main/doc/cn/local_installation_how_to.md) for more details.
 #
 # It will do the following things:
 #   1. install kubectl, helm, kind on your machine.
