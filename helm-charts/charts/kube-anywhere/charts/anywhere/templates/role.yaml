@@ -1,0 +1,50 @@
+{{- range $ns := (include "anywhere.watchNamespaces" . | fromJsonArray) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ template "anywhere.name" $ }}
+  # A namespace the PhoenixAI clusters live in (pairing namespaced-mode operators);
+  # one Role per entry of watchNamespaces.
+  namespace: {{ $ns }}
+  labels:
+    app: {{ template "anywhere.name" $ }}
+rules:
+# Per-cluster credential resolution (reading a PhoenixAI cluster's root password Secret —
+# the operator API never returns credentials). Scoped to get only: anywhere never lists
+# or watches Secrets.
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+# Pod exec (the read-only exec presets and the gated arbitrary-exec endpoint). The SPDY
+# executor POSTs to the pods/exec subresource directly; no other pod verbs are needed —
+# pod topology comes from the operator API, not the Kubernetes API.
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
+# Per-resource Kubernetes Events (the resource events endpoint). Read-only,
+# user-triggered point queries filtered server-side by involvedObject.uid;
+# anywhere never watches Events.
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+# Container stdout for the support bundle (pods/log). Read-only, user-triggered
+# point GETs bounded by limitBytes — one per selected pod per bundle (plus one
+# `previous: true` read for restarted pods); anywhere never follows log streams.
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
+{{- end }}

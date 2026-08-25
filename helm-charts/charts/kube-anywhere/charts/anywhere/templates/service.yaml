@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "anywhere.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "anywhere.name" . }}
+spec:
+  # ClusterIP by default; how to expose the UI (port-forward / Ingress / LoadBalancer)
+  # is the user's choice.
+  type: ClusterIP
+  selector:
+    app: {{ template "anywhere.name" . }}
+  ports:
+  - port: {{ .Values.httpPort }}
+    targetPort: http
+    protocol: TCP
+    name: http
+---
+# Headless governing Service required by the StatefulSet (stable pod
+# identity); UI traffic keeps using the ClusterIP Service above.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "anywhere.name" . }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "anywhere.name" . }}
+spec:
+  clusterIP: None
+  selector:
+    app: {{ template "anywhere.name" . }}
+  ports:
+  - port: {{ .Values.httpPort }}
+    targetPort: http
+    protocol: TCP
+    name: http

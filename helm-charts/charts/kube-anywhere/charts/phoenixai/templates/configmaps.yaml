@@ -1,0 +1,38 @@
+{{- range .Values.configMaps }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}
+data:
+  {{- range $key, $value := .data }}
+  {{- if $value }}
+  {{ $key }}: |
+    {{- $value | nindent 4 }}
+  {{- end }}
+  {{- end }}
+---
+{{- end }}
+
+---
+
+{{- if .Values.phoenixAIFeSpec.entrypoint }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "phoenixaicluster.fe.entrypoint.script.configmap.name" .}}
+data:
+  {{ template "phoenixaicluster.entrypoint.script.name" .}}: |
+    {{- .Values.phoenixAIFeSpec.entrypoint.script | nindent 4 }}
+{{- end }}
+
+---
+
+{{- if .Values.phoenixAICnSpec.entrypoint }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "phoenixaicluster.cn.entrypoint.script.configmap.name" .}}
+data:
+  {{ template "phoenixaicluster.entrypoint.script.name" .}}: |
+    {{- .Values.phoenixAICnSpec.entrypoint.script | nindent 4 }}
+{{- end }}

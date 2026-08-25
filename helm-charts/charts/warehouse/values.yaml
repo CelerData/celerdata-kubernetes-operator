@@ -1,25 +1,39 @@
-# TimeZone is used to set the environment variable TZ for pod, with Asia/Shanghai as the default.
-timeZone: Asia/Shanghai
+# TimeZone is used to set the environment variable TZ for pod, with UTC as the default.
+timeZone: UTC
 
 # This configuration is used to integrate with an external system DataDog.
-# You can enable the integration by setting the enabled to true, e.g. datalog.log.enabled=true will enable datadog agent
+# You can enable the integration by setting the enabled to true, e.g. datadog.log.enabled=true will enable datadog agent
 # to collect the log.
 datadog:
   log:
     enabled: false
     # besides the attributes you added, the chart will append "source" and "service" attributes to the log config.
     # see https://docs.datadoghq.com/containers/kubernetes/log/?tab=operator for more details.
-    logConfig: '{}' # e.g. '{"app": "celerdata", "tags": ["aa", "bb"]}'
+    logConfig: '{}' # e.g. '{"app": "phoenixai", "tags": ["aa", "bb"]}'
   metrics:
     enabled: false
 
+# This configuration is used to integrate with the external system Prometheus.
+# The kube-anywhere chart renders ServiceMonitors for the cluster's own FE/BE/CN only; a warehouse
+# is a separate release with its own Services, so it renders its own ServiceMonitor here. Its CN
+# series carry the parent cluster's `cluster` label plus a `warehouse` label.
+metrics:
+  serviceMonitor:
+    # Whether to expose metrics to Prometheus by ServiceMonitor.
+    # Note: make sure the prometheus operator is installed in your cluster.
+    enabled: false
+    # Prometheus ServiceMonitor labels
+    labels: {}
+    # Prometheus ServiceMonitor interval
+    interval: 15s
+
 spec:
-  # The name of celerdata cluster, a must-have field.
+  # The name of phoenixai cluster, a must-have field.
   # Note:
-  #   1. The celerdata cluster must be an enterprise version.
-  #   2. The celerdata cluster must be created before the warehouse by operator
-  #   3. The celerdata cluster must run in shared-data mode.
-  celerDataClusterName:
+  #   1. The phoenixai cluster must be an enterprise version.
+  #   2. The phoenixai cluster must be created before the warehouse by operator
+  #   3. The phoenixai cluster must run in shared-data mode.
+  phoenixAIClusterName: ""
 
   # Number of replicas to deploy.
   # In the implementation of the operator: Even when both the replicas and autoScalingPolicy are set in the spec
@@ -33,7 +47,7 @@ spec:
   # replicas: 1
   image:
     # image sliced by "repository:tag"
-    repository: us-west1-docker.pkg.dev/phrasal-verve-350013/celerdata/cn-ubuntu
+    repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu
     # Note: the image tag must be greater than or equal to 3.2.0
     tag: 4.1-latest
   # serviceAccount for pod access cloud service.
@@ -48,7 +62,8 @@ spec:
   service:
     # the service type only supported ClusterIP, NodePort, LoadBalancer
     type: "ClusterIP"
-    # the loadBalancerIP for static ip config when the type=LoadBalancer and loadBalancerIp is not empty.
+    # The static IP for the service when type is LoadBalancer and this field is not empty.
+    # Note: the field name is loadbalancerIP (historical spelling), not loadBalancerIP.
     loadbalancerIP: ""
     # add annotations for external service.
     annotations: {}
@@ -69,7 +84,7 @@ spec:
   # imagePullSecrets allows you to use secrets for pulling images for your pods.
   imagePullSecrets: []
     # - name: "image-pull-secret"
-  # If specified, the pod's nodeSelector，displayName="Map of nodeSelectors to match when scheduling pods on nodes"
+  # If specified, the pod's nodeSelector — a map of nodeSelectors to match when scheduling pods on nodes.
   # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
   nodeSelector: {}
     # kubernetes.io/arch: amd64
@@ -120,9 +135,11 @@ spec:
   # see https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#minimum-ready-seconds for more details.
   minReadySeconds: 0
   autoScalingPolicy: {}
-    # you can select different versions of HPA (Horizontal Pod Autoscaler) based on the Kubernetes version you are
-    # using to ensure compatibility and adaptability. the default version is v2beta2.
-    # version: v2beta2
+    # If version is not set, the operator picks the HPA (Horizontal Pod Autoscaler) version
+    # automatically based on your Kubernetes version: autoscaling/v2 on Kubernetes >= 1.26,
+    # autoscaling/v2beta2 on older clusters. Only set it (v1, v2beta2, v2) to override that
+    # choice — note that the v2beta2 API was removed in Kubernetes 1.26.
+    # version: v2
     # maxReplicas: 10
     # minReplicas: 1
     # hpaPolicy:
@@ -155,7 +172,7 @@ spec:
     requests:
       cpu: 4
       memory: 8Gi
-  # the config start for cn, the base information as follows.
+  # the config for starting cn, the base information as follows.
   config: |
     sys_log_level = INFO
     # ports for admin, web, heartbeat service
@@ -177,7 +194,7 @@ spec:
     # - name: my-configmap
     #   mountPath: /etc/my-configmap
     #   subPath: ""
-  # n storageSpec for persistent data.
+  # storageSpec for persistent data.
   storageSpec:
     # the name of volume for mount. if not will use emptyDir.
     name: ""

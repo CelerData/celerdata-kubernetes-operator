@@ -1,0 +1,715 @@
+{{- /*
+Shared-nothing (BE) mode is not supported: this chart only deploys shared-data clusters (FE+CN).
+Fail loudly on the removed BE keys instead of silently ignoring them, so a values file written for
+the open-source kube-starrocks chart cannot slip through.
+*/}}
+{{- if or .Values.phoenixAIBeSpec .Values.phoenixAICluster.enabledBe }}
+{{- fail "phoenixAIBeSpec / phoenixAICluster.enabledBe are not supported: this chart only deploys shared-data clusters (FE+CN); remove the BE values" }}
+{{- end }}
+apiVersion: phoenixdata.ai/v1
+kind: PhoenixAICluster
+metadata:
+  name: {{ template "phoenixaicluster.name" . }}
+  namespace: {{ template "phoenixaicluster.namespace" . }}
+  labels:
+    cluster: {{ template "phoenixaicluster.name" . }}
+  {{- include "phoenixaicluster.labels" . | nindent 4 }}
+  {{- if .Values.phoenixAICluster.annotations }}
+  annotations:
+    {{- toYaml .Values.phoenixAICluster.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.phoenixAICluster.waitForFullRollout }}
+  waitForFullRollout: {{ .Values.phoenixAICluster.waitForFullRollout }}
+  {{- end }}
+  {{- if .Values.phoenixAICluster.disasterRecovery }}
+  disasterRecovery:
+    {{- toYaml .Values.phoenixAICluster.disasterRecovery | nindent 4 }}
+  {{- end }}
+  phoenixAIFeSpec:
+    {{- if .Values.phoenixAIFeSpec.initContainers }}
+    initContainers:
+      {{- toYaml .Values.phoenixAIFeSpec.initContainers | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.shareProcessNamespace }}
+    shareProcessNamespace: {{ .Values.phoenixAIFeSpec.shareProcessNamespace }}
+    {{- end }}
+    image: "{{ .Values.phoenixAIFeSpec.image.repository }}:{{ include "phoenixaicluster.fe.image.tag" . }}"
+    {{- if .Values.phoenixAIFeSpec.entrypoint }}
+    command: ["bash", "-c"]
+    args:
+      - {{template "phoenixaicluster.entrypoint.mount.path" .}}/{{template "phoenixaicluster.entrypoint.script.name" .}}
+    {{- end }}
+    replicas: {{ .Values.phoenixAIFeSpec.replicas }}
+    imagePullPolicy: {{ .Values.phoenixAIFeSpec.imagePullPolicy }}
+    {{- if .Values.phoenixAIFeSpec.maxUnavailablePods }}
+    updateStrategy:
+      rollingUpdate:
+        maxUnavailable: {{ .Values.phoenixAIFeSpec.maxUnavailablePods }}
+    {{- end }}
+    {{- /*
+    support both resources and resource for backward compatibility
+    */}}
+    {{- if .Values.phoenixAIFeSpec.resources }}
+    {{- include "phoenixaicluster.fe.resources" . | nindent 4 }}
+    {{- else if .Values.phoenixAIFeSpec.resource }}
+    {{- toYaml .Values.phoenixAIFeSpec.resource | nindent 4 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.service.type }}
+    service:
+      type: {{ .Values.phoenixAIFeSpec.service.type }}
+      {{- if and (eq "LoadBalancer" .Values.phoenixAIFeSpec.service.type) .Values.phoenixAIFeSpec.service.loadbalancerIP }}
+      loadBalancerIP: {{ .Values.phoenixAIFeSpec.service.loadbalancerIP }}
+      {{- end }}
+      {{- if and (eq "LoadBalancer" .Values.phoenixAIFeSpec.service.type) .Values.phoenixAIFeSpec.service.loadBalancerSourceRanges}}
+      loadBalancerSourceRanges:
+        {{- toYaml .Values.phoenixAIFeSpec.service.loadBalancerSourceRanges | nindent 8 }}
+      {{- end }}
+      {{- if and (or (eq "LoadBalancer" .Values.phoenixAIFeSpec.service.type) (eq "NodePort" .Values.phoenixAIFeSpec.service.type)) .Values.phoenixAIFeSpec.service.externalTrafficPolicy }}
+      externalTrafficPolicy: {{ .Values.phoenixAIFeSpec.service.externalTrafficPolicy }}
+      {{- end }}
+      {{- if .Values.phoenixAIFeSpec.service.ports }}
+      ports:
+        {{- toYaml .Values.phoenixAIFeSpec.service.ports | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.phoenixAIFeSpec.service.annotations .Values.datadog.metrics.enabled }}
+      annotations:
+        {{- if .Values.datadog.metrics.enabled }}
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "{{- default 8030 (include "phoenixaicluster.fe.http.port" .) }}"
+        prometheus.io/scrape: "true"
+        {{- end }}
+        {{- if .Values.phoenixAIFeSpec.service.annotations}}
+        {{- toYaml .Values.phoenixAIFeSpec.service.annotations | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.phoenixAIFeSpec.service.labels}}
+      labels:
+        {{- toYaml .Values.phoenixAIFeSpec.service.labels | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    annotations:
+      app.phoenixdata.ai/fe-config-hash: "{{template "phoenixaicluster.fe.config.hash" . }}"
+      {{- if .Values.datadog.log.enabled }}
+      ad.datadoghq.com/fe.logs: {{ include "phoenixaicluster.datadog.log.annotation" (dict "root" . "component" "fe" "multilinePattern" "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d+" "multilineName" "log_start_with_timestamp") }}
+      {{- end }}
+      {{- if .Values.phoenixAIFeSpec.entrypoint }}
+      app.phoenixdata.ai/fe-entrypoint-hash: "{{ template "phoenixaicluster.fe.entrypoint.script.hash" . }}"
+      {{- end }}
+      {{- if .Values.phoenixAIFeSpec.annotations }}
+      {{- toYaml .Values.phoenixAIFeSpec.annotations | nindent 6 }}
+      {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.imagePullSecrets .Values.phoenixAICluster.componentValues.imagePullSecrets }}
+    imagePullSecrets:
+      {{- include "phoenixaicluster.fe.imagePullSecrets" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.serviceAccount .Values.phoenixAICluster.componentValues.serviceAccount }}
+    serviceAccount: {{ include "phoenixaicluster.fe.serviceAccount" . }}
+    {{- end }}
+    runAsNonRoot: {{ include "phoenixaicluster.fe.runAsNonRoot" . }}
+    {{- if .Values.phoenixAIFeSpec.readOnlyRootFilesystem }}
+    readOnlyRootFilesystem: {{ .Values.phoenixAIFeSpec.readOnlyRootFilesystem }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.capabilities }}
+    capabilities:
+      {{- toYaml .Values.phoenixAIFeSpec.capabilities | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.sysctls }}
+    sysctls:
+      {{- toYaml .Values.phoenixAIFeSpec.sysctls | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.nodeSelector .Values.phoenixAICluster.componentValues.nodeSelector }}
+    nodeSelector:
+      {{- include "phoenixaicluster.fe.nodeSelector" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.podLabels .Values.phoenixAICluster.componentValues.podLabels .Values.datadog.profiling.fe }}
+    podLabels:
+      {{- if or .Values.phoenixAIFeSpec.podLabels .Values.phoenixAICluster.componentValues.podLabels }}
+      {{- include "phoenixaicluster.fe.podLabels" . | nindent 6 }}
+      {{- end }}
+      {{- if .Values.datadog.profiling.fe }}
+      admission.datadoghq.com/config.mode: {{ .Values.datadog.profiling.configMode }}
+      admission.datadoghq.com/enabled: "true"
+      {{- end }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.hostAliases .Values.phoenixAICluster.componentValues.hostAliases }}
+    hostAliases:
+      {{- include "phoenixaicluster.fe.hostAliases" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.schedulerName .Values.phoenixAICluster.componentValues.schedulerName }}
+    schedulerName: {{ include "phoenixaicluster.fe.schedulerName" . }}
+    {{- end }}
+    feEnvVars:
+      - name: TZ
+        value: {{ .Values.timeZone }}
+      {{- if .Values.datadog.log.enabled }}
+      - name: LOG_CONSOLE
+        value: "1"
+      {{- end }}
+      {{- if and .Values.initPassword.enabled (.Values.phoenixAIFeSpec.feEnvVars | toJson | contains "MYSQL_PWD" | not) }}
+      - name: "MYSQL_PWD"
+        valueFrom:
+          secretKeyRef:
+            name: {{ template "phoenixaicluster.initpassword.secret.name" . }}
+            key: password
+      {{- end }}
+      {{- if .Values.datadog.profiling.fe }}
+      - name: ENABLE_DATADOG_PROFILE
+        value: "true"
+      - name: DD_PROFILING_ENABLED
+        value: "true"
+      - name: DD_SERVICE
+        value: phoenixai-fe
+      - name: DD_ENV
+        value: "{{ .Values.datadog.profiling.env }}"
+      - name: DD_VERSION
+        value: "{{ include "phoenixaicluster.fe.image.tag" . }}"
+      - name: DD_PROFILING_DDPROF_ALLOC_ENABLED
+        value: "true"
+      - name: DD_PROFILING_DDPROF_ENABLED
+        value: "true"
+      - name: DD_PROFILING_DDPROF_LIVEHEAP_ENABLED
+        value: "true"
+      - name: DD_PROFILING_DIRECTALLOCATION_ENABLED
+        value: "true"
+      {{- end }}
+      {{- if .Values.phoenixAIFeSpec.feEnvVars }}
+      {{- /* if it is a map, we use range to iterate to merge environment variables */}}
+      {{- if eq (kindOf .Values.phoenixAIFeSpec.feEnvVars) "map" }}
+      {{- range $key, $value := .Values.phoenixAIFeSpec.feEnvVars }}
+      - name: {{ $key }}
+        {{- if eq (kindOf $value) "string" }}
+        value: {{ $value | quote }}
+        {{- else }}
+        {{- toYaml $value | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- else }}
+      {{- /* the default kind is slice, we keep backward compatibility */}}
+      {{- toYaml .Values.phoenixAIFeSpec.feEnvVars | nindent 6 }}
+      {{- end }}
+      {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.affinity .Values.phoenixAICluster.componentValues.affinity }}
+    affinity:
+      {{- include "phoenixaicluster.fe.affinity" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.tolerations .Values.phoenixAICluster.componentValues.tolerations }}
+    tolerations:
+      {{- include "phoenixaicluster.fe.tolerations" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.topologySpreadConstraints .Values.phoenixAICluster.componentValues.topologySpreadConstraints }}
+    topologySpreadConstraints:
+      {{- include "phoenixaicluster.fe.topologySpreadConstraints" . | nindent 6 }}
+    {{- end }}
+    terminationGracePeriodSeconds: {{ .Values.phoenixAIFeSpec.terminationGracePeriodSeconds }}
+    {{- if .Values.phoenixAIFeSpec.startupProbeFailureSeconds }}
+    startupProbeFailureSeconds: {{ .Values.phoenixAIFeSpec.startupProbeFailureSeconds }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.livenessProbeFailureSeconds }}
+    livenessProbeFailureSeconds: {{ .Values.phoenixAIFeSpec.livenessProbeFailureSeconds }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.readinessProbeFailureSeconds }}
+    readinessProbeFailureSeconds: {{ .Values.phoenixAIFeSpec.readinessProbeFailureSeconds }}
+    {{- end }}
+    minReadySeconds: {{ .Values.phoenixAIFeSpec.minReadySeconds }}
+    podManagementPolicy: {{ .Values.phoenixAIFeSpec.podManagementPolicy }}
+    {{- if .Values.phoenixAIFeSpec.lifecycle }}
+    lifecycle:
+      {{- toYaml .Values.phoenixAIFeSpec.lifecycle | nindent 6 }}
+    {{- end }}
+    {{- if and .Values.phoenixAIFeSpec.sidecarsMap .Values.phoenixAIFeSpec.sidecars }}
+      {{ fail "phoenixAIFeSpec.sidecarsMap and phoenixAIFeSpec.sidecars cannot be set at the same time" }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.sidecarsMap .Values.phoenixAIFeSpec.sidecars }}
+    sidecars:
+      {{- if .Values.phoenixAIFeSpec.sidecarsMap }}
+      {{- range $name, $spec := .Values.phoenixAIFeSpec.sidecarsMap }}
+      - name: {{ $name }}
+        {{- toYaml $spec | nindent 8 }}
+      {{- end }}
+      {{- else if .Values.phoenixAIFeSpec.sidecars }}
+      {{- toYaml .Values.phoenixAIFeSpec.sidecars | nindent 6 }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.secrets }}
+    secrets:
+    {{- range .Values.phoenixAIFeSpec.secrets }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      subPath: {{ .subPath }}
+    {{- end }}
+    {{- end }}
+    {{- if or .Values.phoenixAIFeSpec.configMaps .Values.phoenixAIFeSpec.entrypoint }}
+    configMaps:
+    {{- if .Values.phoenixAIFeSpec.configMaps }}
+    {{- range .Values.phoenixAIFeSpec.configMaps }}
+      - name: {{ .name }}
+        mountPath: {{ .mountPath }}
+        subPath: {{ .subPath }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.entrypoint }}
+      - name: {{template "phoenixaicluster.fe.entrypoint.script.configmap.name" .}}
+        mountPath: {{template "phoenixaicluster.entrypoint.mount.path" .}}/{{ template "phoenixaicluster.entrypoint.script.name" .}}
+        subPath: {{ template "phoenixaicluster.entrypoint.script.name" .}}
+    {{- end }}
+    {{- end }}
+    configMapInfo:
+      configMapName: {{ template  "phoenixaicluster.fe.configmap.name" . }}
+      resolveKey: fe.conf
+    {{- if or .Values.phoenixAIFeSpec.storageSpec.name .Values.phoenixAIFeSpec.emptyDirs .Values.phoenixAIFeSpec.hostPaths .Values.phoenixAIFeSpec.csiVolumes }}
+    storageVolumes:
+    {{- if .Values.phoenixAIFeSpec.storageSpec.name }}
+    - name: {{ .Values.phoenixAIFeSpec.storageSpec.name }}{{ template "phoenixaicluster.fe.meta.suffix" . }}
+      {{- if .Values.phoenixAIFeSpec.storageSpec.storageClassName }}
+      storageClassName: {{ .Values.phoenixAIFeSpec.storageSpec.storageClassName }}
+      {{- end }}
+      storageSize: "{{ .Values.phoenixAIFeSpec.storageSpec.storageSize }}"
+      mountPath: {{ template "phoenixaicluster.fe.meta.path" . }}
+    - name: {{ .Values.phoenixAIFeSpec.storageSpec.name }}{{ template "phoenixaicluster.fe.log.suffix" . }}
+      {{- if .Values.phoenixAIFeSpec.storageSpec.logStorageClassName }}
+      storageClassName: {{ .Values.phoenixAIFeSpec.storageSpec.logStorageClassName }}
+      {{- end }}
+      storageSize: "{{ .Values.phoenixAIFeSpec.storageSpec.logStorageSize }}"
+      mountPath: {{ template "phoenixaicluster.fe.log.path" . }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.emptyDirs }}
+    {{- range .Values.phoenixAIFeSpec.emptyDirs }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.hostPaths }}
+    {{- range .Values.phoenixAIFeSpec.hostPaths }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "hostPath"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      hostPath:
+        {{- toYaml .hostPath | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.csiVolumes }}
+    {{- range .Values.phoenixAIFeSpec.csiVolumes }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "csi"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      csi:
+        {{- toYaml .csi | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeSpec.persistentVolumeClaimRetentionPolicy }}
+    persistentVolumeClaimRetentionPolicy:
+      {{- toYaml .Values.phoenixAIFeSpec.persistentVolumeClaimRetentionPolicy | nindent 6 }}
+    {{- end }}
+  {{- if .Values.phoenixAICluster.enabledCn }}
+  phoenixAICnSpec:
+    {{- if .Values.phoenixAICnSpec.initContainers }}
+    initContainers:
+      {{- toYaml .Values.phoenixAICnSpec.initContainers | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.shareProcessNamespace }}
+    shareProcessNamespace: {{ .Values.phoenixAICnSpec.shareProcessNamespace }}
+    {{- end }}
+    image: "{{ .Values.phoenixAICnSpec.image.repository }}:{{ include "phoenixaicluster.cn.image.tag" . }}"
+    {{- if .Values.phoenixAICnSpec.entrypoint }}
+    command: ["bash", "-c"]
+    args:
+      - {{template "phoenixaicluster.entrypoint.mount.path" .}}/{{template "phoenixaicluster.entrypoint.script.name" .}}
+    {{- end }}
+    {{- if hasKey .Values.phoenixAICnSpec "replicas" }}
+    replicas: {{ .Values.phoenixAICnSpec.replicas }}
+    {{- end }}
+    imagePullPolicy: {{ .Values.phoenixAICnSpec.imagePullPolicy }}
+    {{- if .Values.phoenixAICnSpec.maxUnavailablePods }}
+    updateStrategy:
+      rollingUpdate:
+        maxUnavailable: {{ .Values.phoenixAICnSpec.maxUnavailablePods }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.serviceAccount .Values.phoenixAICluster.componentValues.serviceAccount }}
+    serviceAccount: {{ include "phoenixaicluster.cn.serviceAccount" . }}
+    {{- end }}
+    runAsNonRoot: {{ include "phoenixaicluster.cn.runAsNonRoot" . }}
+    {{- if .Values.phoenixAICnSpec.readOnlyRootFilesystem }}
+    readOnlyRootFilesystem: {{ .Values.phoenixAICnSpec.readOnlyRootFilesystem }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.capabilities .Values.datadog.profiling.cn }}
+    capabilities:
+      {{- if or .Values.phoenixAICnSpec.capabilities.add .Values.datadog.profiling.cn }}
+      add:
+        {{- if .Values.phoenixAICnSpec.capabilities.add }}
+        {{- toYaml .Values.phoenixAICnSpec.capabilities.add | nindent 8 }}
+        {{- end }}
+        {{- if .Values.datadog.profiling.cn }}
+        {{- if and .Values.phoenixAICnSpec.capabilities.add (has "PERFMON" .Values.phoenixAICnSpec.capabilities.add) | not }}
+        - PERFMON
+        {{- end }}
+        {{- if and .Values.phoenixAICnSpec.capabilities.add (has "SYS_PTRACE" .Values.phoenixAICnSpec.capabilities.add) | not }}
+        - SYS_PTRACE
+        {{- end }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.phoenixAICnSpec.capabilities.drop }}
+      drop:
+        {{- toYaml .Values.phoenixAICnSpec.capabilities.drop | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.sysctls }}
+    sysctls:
+      {{- toYaml .Values.phoenixAICnSpec.sysctls | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.podLabels .Values.phoenixAICluster.componentValues.podLabels .Values.datadog.profiling.cn }}
+    podLabels:
+      {{- if or .Values.phoenixAICnSpec.podLabels .Values.phoenixAICluster.componentValues.podLabels }}
+      {{- include "phoenixaicluster.cn.podLabels" . | nindent 6 }}
+      {{- end }}
+      {{- if .Values.datadog.profiling.cn }}
+      admission.datadoghq.com/config.mode: {{ .Values.datadog.profiling.configMode }}
+      admission.datadoghq.com/enabled: "true"
+      {{- end }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.hostAliases .Values.phoenixAICluster.componentValues.hostAliases }}
+    hostAliases:
+      {{- include "phoenixaicluster.cn.hostAliases" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.schedulerName .Values.phoenixAICluster.componentValues.schedulerName }}
+    schedulerName: {{ include "phoenixaicluster.cn.schedulerName" . }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.nodeSelector .Values.phoenixAICluster.componentValues.nodeSelector }}
+    nodeSelector:
+      {{- include "phoenixaicluster.cn.nodeSelector" . | nindent 6 }}
+    {{- end }}
+    cnEnvVars:
+      - name: TZ
+        value: {{ .Values.timeZone }}
+      {{- if .Values.datadog.log.enabled }}
+      - name: LOG_CONSOLE
+        value: "1"
+      {{- end }}
+      {{- if and .Values.initPassword.enabled (.Values.phoenixAICnSpec.cnEnvVars | toJson | contains "MYSQL_PWD" | not) }}
+      - name: "MYSQL_PWD"
+        valueFrom:
+          secretKeyRef:
+            name: {{ template "phoenixaicluster.initpassword.secret.name" . }}
+            key: password
+      {{- end }}
+      {{- if .Values.datadog.profiling.cn }}
+      - name: ENABLE_DATADOG_PROFILE
+        value: "true"
+      - name: DD_PROFILING_ENABLED
+        value: "true"
+      - name: DD_SERVICE
+        value: phoenixai-cn
+      - name: DD_ENV
+        value: "{{ .Values.datadog.profiling.env }}"
+      - name: DD_VERSION
+        value: "{{ include "phoenixaicluster.cn.image.tag" . }}"
+      {{- end }}
+      {{- if .Values.phoenixAICnSpec.cnEnvVars }}
+      {{- /* if it is a map, we use range to iterate to merge environment variables */}}
+      {{- if eq (kindOf .Values.phoenixAICnSpec.cnEnvVars) "map" }}
+      {{- range $key, $value := .Values.phoenixAICnSpec.cnEnvVars }}
+      - name: {{ $key }}
+        {{- if eq (kindOf $value) "string" }}
+        value: {{ $value | quote }}
+        {{- else }}
+        {{- toYaml $value | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- else }}
+      {{- /* the default kind is slice, we keep backward compatibility */}}
+      {{- toYaml .Values.phoenixAICnSpec.cnEnvVars | nindent 6 }}
+      {{- end }}
+      {{- end }}
+
+    {{- if or .Values.phoenixAICnSpec.affinity .Values.phoenixAICluster.componentValues.affinity }}
+    affinity:
+      {{- include "phoenixaicluster.cn.affinity" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.tolerations .Values.phoenixAICluster.componentValues.tolerations }}
+    tolerations:
+      {{- include "phoenixaicluster.cn.tolerations" . | nindent 6 }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.topologySpreadConstraints .Values.phoenixAICluster.componentValues.topologySpreadConstraints }}
+    topologySpreadConstraints:
+      {{- include "phoenixaicluster.cn.topologySpreadConstraints" . | nindent 6 }}
+    {{- end }}
+    terminationGracePeriodSeconds: {{ .Values.phoenixAICnSpec.terminationGracePeriodSeconds }}
+    {{- if .Values.phoenixAICnSpec.startupProbeFailureSeconds }}
+    startupProbeFailureSeconds: {{ .Values.phoenixAICnSpec.startupProbeFailureSeconds }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.livenessProbeFailureSeconds }}
+    livenessProbeFailureSeconds: {{ .Values.phoenixAICnSpec.livenessProbeFailureSeconds }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.readinessProbeFailureSeconds }}
+    readinessProbeFailureSeconds: {{ .Values.phoenixAICnSpec.readinessProbeFailureSeconds }}
+    {{- end }}
+    minReadySeconds: {{ .Values.phoenixAICnSpec.minReadySeconds }}
+    podManagementPolicy: {{ .Values.phoenixAICnSpec.podManagementPolicy }}
+    {{- if .Values.phoenixAICnSpec.lifecycle }}
+    lifecycle:
+      {{- toYaml .Values.phoenixAICnSpec.lifecycle | nindent 6 }}
+    {{- end }}
+    {{- if and .Values.phoenixAICnSpec.sidecarsMap .Values.phoenixAICnSpec.sidecars }}
+      {{ fail "phoenixAICnSpec.sidecarsMap and phoenixAICnSpec.sidecars cannot be set at the same time" }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.sidecarsMap .Values.phoenixAICnSpec.sidecars }}
+    sidecars:
+      {{- if .Values.phoenixAICnSpec.sidecarsMap }}
+      {{- range $name, $spec := .Values.phoenixAICnSpec.sidecarsMap }}
+      - name: {{ $name }}
+        {{- toYaml $spec | nindent 8 }}
+      {{- end }}
+      {{- else if .Values.phoenixAICnSpec.sidecars }}
+      {{- toYaml .Values.phoenixAICnSpec.sidecars | nindent 6 }}
+      {{- end }}
+    {{- end }}
+    {{- if and .Values.phoenixAICluster.enabledCn .Values.phoenixAICnSpec.autoScalingPolicy }}
+    autoScalingPolicy:
+      {{- toYaml .Values.phoenixAICnSpec.autoScalingPolicy | nindent 6 }}
+    {{- end }}
+    {{- /*
+    support both resources and resource for backward compatibility
+    */}}
+    {{- if .Values.phoenixAICnSpec.resources }}
+    {{- include "phoenixaicluster.cn.resources" . | nindent 4 }}
+    {{- else if .Values.phoenixAICnSpec.resource }}
+    {{- toYaml .Values.phoenixAICnSpec.resource | nindent 4 }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.service.type }}
+    service:
+      type: {{ .Values.phoenixAICnSpec.service.type }}
+      {{- if and (eq "LoadBalancer" .Values.phoenixAICnSpec.service.type) .Values.phoenixAICnSpec.service.loadbalancerIP }}
+      loadBalancerIP: {{ .Values.phoenixAICnSpec.service.loadbalancerIP }}
+      {{- end }}
+      {{- if and (eq "LoadBalancer" .Values.phoenixAICnSpec.service.type) .Values.phoenixAICnSpec.service.loadBalancerSourceRanges}}
+      loadBalancerSourceRanges:
+        {{- toYaml .Values.phoenixAICnSpec.service.loadBalancerSourceRanges | nindent 8 }}
+      {{- end }}
+      {{- if and (or (eq "LoadBalancer" .Values.phoenixAICnSpec.service.type) (eq "NodePort" .Values.phoenixAICnSpec.service.type)) .Values.phoenixAICnSpec.service.externalTrafficPolicy }}
+      externalTrafficPolicy: {{ .Values.phoenixAICnSpec.service.externalTrafficPolicy }}
+      {{- end }}
+      {{- if .Values.phoenixAICnSpec.service.ports }}
+      ports:
+        {{- toYaml .Values.phoenixAICnSpec.service.ports | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.phoenixAICnSpec.service.annotations .Values.datadog.metrics.enabled }}
+      annotations:
+        {{- if .Values.datadog.metrics.enabled }}
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "{{- default 8040 (include "phoenixaicluster.cn.webserver.port" .) }}"
+        prometheus.io/scrape: "true"
+        {{- end }}
+        {{- if .Values.phoenixAICnSpec.service.annotations }}
+        {{- toYaml .Values.phoenixAICnSpec.service.annotations | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.phoenixAICnSpec.service.labels}}
+      labels:
+        {{- toYaml .Values.phoenixAICnSpec.service.labels | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    annotations:
+      app.phoenixdata.ai/cn-config-hash: "{{template "phoenixaicluster.cn.config.hash" . }}"
+      {{- if .Values.datadog.log.enabled }}
+      ad.datadoghq.com/cn.logs: {{ include "phoenixaicluster.datadog.log.annotation" (dict "root" . "component" "cn" "multilinePattern" "[IWEF]\\d{8}\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d+" "multilineName" "log_start_with_timestamp") }}
+      {{- end }}
+      {{- if .Values.phoenixAICnSpec.annotations }}
+      {{- toYaml .Values.phoenixAICnSpec.annotations | nindent 6 }}
+      {{- end }}
+      {{- if .Values.phoenixAICnSpec.entrypoint }}
+      app.phoenixdata.ai/cn-entrypoint-hash: "{{ template "phoenixaicluster.cn.entrypoint.script.hash" . }}"
+      {{- end }}
+    {{- if or .Values.phoenixAICnSpec.imagePullSecrets .Values.phoenixAICluster.componentValues.imagePullSecrets }}
+    imagePullSecrets:
+      {{- include "phoenixaicluster.cn.imagePullSecrets" . | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.secrets }}
+    secrets:
+    {{- range .Values.phoenixAICnSpec.secrets }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      subPath: {{ .subPath }}
+    {{- end }}
+    {{- end }}
+    {{- if or .Values.phoenixAICnSpec.configMaps .Values.phoenixAICnSpec.entrypoint }}
+    configMaps:
+    {{- if .Values.phoenixAICnSpec.configMaps }}
+    {{- range .Values.phoenixAICnSpec.configMaps }}
+      - name: {{ .name }}
+        mountPath: {{ .mountPath }}
+        subPath: {{ .subPath }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.entrypoint }}
+      - name: {{template "phoenixaicluster.cn.entrypoint.script.configmap.name" .}}
+        mountPath: {{template "phoenixaicluster.entrypoint.mount.path" .}}/{{ template "phoenixaicluster.entrypoint.script.name" .}}
+        subPath: {{ template "phoenixaicluster.entrypoint.script.name" .}}
+    {{- end }}
+    {{- end }}
+    configMapInfo:
+      configMapName: {{template  "phoenixaicluster.cn.configmap.name" . }}
+      resolveKey: cn.conf
+    {{- if or .Values.phoenixAICnSpec.storageSpec.name .Values.phoenixAICnSpec.emptyDirs .Values.phoenixAICnSpec.hostPaths .Values.phoenixAICnSpec.csiVolumes }}
+    storageVolumes:
+    {{- if .Values.phoenixAICnSpec.storageSpec.name }}
+    {{- if gt (int .Values.phoenixAICnSpec.storageSpec.storageCount) 1 }}
+    {{- $storageName := .Values.phoenixAICnSpec.storageSpec.name -}}
+    {{- $storageClassName := .Values.phoenixAICnSpec.storageSpec.storageClassName -}}
+    {{- $storageSize := .Values.phoenixAICnSpec.storageSpec.storageSize -}}
+    {{- $storageMountPath := include "phoenixaicluster.cn.data.path" . -}}
+    {{- range $i, $e := until (int .Values.phoenixAICnSpec.storageSpec.storageCount) }}
+    - name: {{ $storageName }}{{ $i }}{{template "phoenixaicluster.cn.data.suffix" . }}
+      {{- if $storageClassName }}
+      storageClassName: {{ $storageClassName }}
+      {{- end }}
+      storageSize: "{{ $storageSize }}"
+      mountPath: {{ $storageMountPath }}{{ $i }}
+    {{- end }}
+    {{- else }}
+    - name: {{ .Values.phoenixAICnSpec.storageSpec.name }}{{template "phoenixaicluster.cn.data.suffix" . }}
+      {{- if .Values.phoenixAICnSpec.storageSpec.storageClassName }}
+      storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.storageClassName }}
+      {{- end }}
+      storageSize: "{{ .Values.phoenixAICnSpec.storageSpec.storageSize }}"
+      mountPath: {{template "phoenixaicluster.cn.data.path" . }}
+    {{- end }}
+    - name: {{ .Values.phoenixAICnSpec.storageSpec.name }}{{template "phoenixaicluster.cn.log.suffix" . }}
+      {{- if .Values.phoenixAICnSpec.storageSpec.logStorageClassName }}
+      storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.logStorageClassName }}
+      {{- end }}
+      storageSize: "{{ .Values.phoenixAICnSpec.storageSpec.logStorageSize }}"
+      mountPath: {{template "phoenixaicluster.cn.log.path" . }}
+    - name: {{ .Values.phoenixAICnSpec.storageSpec.name }}{{template "phoenixaicluster.cn.spill.suffix" . }}
+      {{- if .Values.phoenixAICnSpec.storageSpec.spillStorageClassName }}
+      storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.spillStorageClassName }}
+      {{- end }}
+      storageSize: "{{ .Values.phoenixAICnSpec.storageSpec.spillStorageSize}}"
+      mountPath: {{template "phoenixaicluster.cn.spill.path" . }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.emptyDirs }}
+    {{- range .Values.phoenixAICnSpec.emptyDirs }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.hostPaths }}
+    {{- range .Values.phoenixAICnSpec.hostPaths }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "hostPath"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      hostPath:
+        {{- toYaml .hostPath | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.csiVolumes }}
+    {{- range .Values.phoenixAICnSpec.csiVolumes }}
+    - name: {{ .name }}
+      mountPath: {{ .mountPath }}
+      storageClassName: "csi"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      csi:
+        {{- toYaml .csi | nindent 8 }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAICnSpec.persistentVolumeClaimRetentionPolicy }}
+    persistentVolumeClaimRetentionPolicy:
+      {{- toYaml .Values.phoenixAICnSpec.persistentVolumeClaimRetentionPolicy | nindent 6 }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.phoenixAIFeProxySpec.enabled }}
+  phoenixAIFeProxySpec:
+    {{- if .Values.phoenixAIFeProxySpec.image.repository }}
+    image: "{{ .Values.phoenixAIFeProxySpec.image.repository }}:{{ .Values.phoenixAIFeProxySpec.image.tag }}"
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.imagePullSecrets }}
+    imagePullSecrets:
+      {{- toYaml .Values.phoenixAIFeProxySpec.imagePullSecrets | nindent 4 }}
+    {{- end }}
+    replicas: {{ .Values.phoenixAIFeProxySpec.replicas }}
+    imagePullPolicy: {{ .Values.phoenixAIFeProxySpec.imagePullPolicy }}
+    resolver: "{{ .Values.phoenixAIFeProxySpec.resolver }}"
+    {{- if .Values.phoenixAIFeProxySpec.resources }}
+      {{- toYaml .Values.phoenixAIFeProxySpec.resources | nindent 4 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.service.type }}
+    service:
+      type: {{ .Values.phoenixAIFeProxySpec.service.type }}
+      {{- if .Values.phoenixAIFeProxySpec.service.annotations }}
+      annotations:
+        {{- toYaml .Values.phoenixAIFeProxySpec.service.annotations | nindent 8 }}
+      {{- end }}
+      {{- if .Values.phoenixAIFeProxySpec.service.labels}}
+      labels:
+        {{- toYaml .Values.phoenixAIFeProxySpec.service.labels | nindent 8 }}
+      {{- end }}
+      {{- if and (eq "LoadBalancer" .Values.phoenixAIFeProxySpec.service.type) .Values.phoenixAIFeProxySpec.service.loadbalancerIP }}
+      loadBalancerIP: {{ .Values.phoenixAIFeProxySpec.service.loadbalancerIP }}
+      {{- end }}
+      {{- if and (eq "LoadBalancer" .Values.phoenixAIFeProxySpec.service.type) .Values.phoenixAIFeProxySpec.service.loadBalancerSourceRanges}}
+      loadBalancerSourceRanges:
+        {{- toYaml .Values.phoenixAIFeProxySpec.service.loadBalancerSourceRanges | nindent 8 }}
+      {{- end }}
+      {{- if and (or (eq "LoadBalancer" .Values.phoenixAIFeProxySpec.service.type) (eq "NodePort" .Values.phoenixAIFeProxySpec.service.type)) .Values.phoenixAIFeProxySpec.service.externalTrafficPolicy }}
+      externalTrafficPolicy: {{ .Values.phoenixAIFeProxySpec.service.externalTrafficPolicy }}
+      {{- end }}
+      {{- if .Values.phoenixAIFeProxySpec.service.ports }}
+      ports:
+        {{- toYaml .Values.phoenixAIFeProxySpec.service.ports | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.nodeSelector }}
+    nodeSelector:
+      {{- toYaml .Values.phoenixAIFeProxySpec.nodeSelector | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.affinity }}
+    affinity:
+      {{- toYaml .Values.phoenixAIFeProxySpec.affinity | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.tolerations }}
+    tolerations:
+      {{- toYaml .Values.phoenixAIFeProxySpec.tolerations | nindent 6 }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.livenessProbeFailureSeconds }}
+    livenessProbeFailureSeconds: {{ .Values.phoenixAIFeProxySpec.livenessProbeFailureSeconds }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.readinessProbeFailureSeconds }}
+    readinessProbeFailureSeconds: {{ .Values.phoenixAIFeProxySpec.readinessProbeFailureSeconds }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.emptyDirs }}
+    storageVolumes:
+    {{- range .Values.phoenixAIFeProxySpec.emptyDirs }}
+    - name: {{ .name }}
+      storageClassName: "emptyDir"
+      {{- if .readOnly }}
+      readOnly: {{ .readOnly }}
+      {{- end }}
+      mountPath: {{ .mountPath }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.phoenixAIFeProxySpec.podLabels }}
+    podLabels:
+      {{- toYaml .Values.phoenixAIFeProxySpec.podLabels | nindent 6 }}
+    {{- end }}
+  {{- end }}

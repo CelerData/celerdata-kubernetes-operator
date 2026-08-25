@@ -1,0 +1,26 @@
+# This manifest deploys a very simple PhoenixAI cluster with 1 FE and 1 CN.
+# Without any workload, Starrocks doesn't require too much cpu and memory resource.
+
+apiVersion: phoenixdata.ai/v1
+kind: PhoenixAICluster
+metadata:
+  name: a-phoenixai-with-no-ha  # change the name if needed.
+spec:
+  phoenixAIFeSpec:
+    image: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/fe-ubuntu:4.1-latest
+    replicas: 1
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
+  phoenixAICnSpec:
+    image: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu:4.1-latest
+    replicas: 1
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 1
+      memory: 2Gi

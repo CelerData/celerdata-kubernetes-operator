@@ -1,0 +1,30 @@
+{{- /*
+The data PVC (embedded SQLite: usage ledger, future console state) is a standalone
+chart-managed resource rather than a StatefulSet volumeClaimTemplate:
+that field is immutable, which froze persistence.size at install time. As a plain PVC, growing
+persistence.size flows through helm upgrade (in-place expansion when the StorageClass has
+allowVolumeExpansion; shrinking is rejected by Kubernetes). The single fixed replica means
+per-ordinal claim templating bought nothing.
+*/}}
+{{- if not .Values.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ template "anywhere.dataPVCName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "anywhere.name" . }}
+  annotations:
+    # Usage records are the customer's bill: the PVC survives helm uninstall (the same
+    # semantics volumeClaimTemplates provided) — remove it deliberately. A same-name
+    # reinstall adopts the kept PVC and its data.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

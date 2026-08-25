@@ -1,0 +1,8 @@
+{
+  "label": "Get started",
+  "position": 1,
+  "link": {
+    "type": "generated-index",
+    "description": "Install the chart, grant the right permissions, and migrate an existing deployment."
+  }
+}

@@ -1,0 +1,18 @@
+{{- if and .Values.phoenixAIOperator.enabled .Values.phoenixAIOperator.enableApiServer }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "operator.name" . }}-api
+  namespace: {{ template "operator.namespace" . }}
+  labels:
+    app: {{ template "operator.name" . }}-operator
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ template "operator.name" . }}-operator
+  ports:
+  - port: {{ .Values.phoenixAIOperator.apiServerPort }}
+    targetPort: grpc-api
+    protocol: TCP
+    name: grpc-api
+{{- end }}

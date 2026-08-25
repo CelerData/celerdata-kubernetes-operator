@@ -1,21 +1,35 @@
-{{- define "celerdatawarehouse.name" -}}
+{{- define "phoenixaiwarehouse.name" -}}
 {{ .Release.Name }}
 {{- end }}
 
-{{- define "celerdatawarehouse.namespace" -}}
+{{- define "phoenixaiwarehouse.namespace" -}}
 {{ .Release.Namespace }}
 {{- end }}
 
-{{- define "celerdatawarehouse.labels" -}}
+{{/*
+phoenixaiwarehouse.prefix is the name prefix the operator gives every sub-resource of a warehouse
+(StatefulSet, Services, ConfigMap, HPA), and the value it puts in their
+app.phoenixai.ownerreference/name label. It must stay in sync with GetPrefixNameForWarehouse in
+pkg/k8sutils/templates/object/meta.go.
+*/}}
+{{- define "phoenixaiwarehouse.prefix" -}}
+{{- print (include "phoenixaiwarehouse.name" .) "-warehouse" }}
+{{- end }}
+
+{{- define "phoenixaiwarehouse.cn.name" -}}
+{{- print (include "phoenixaiwarehouse.prefix" .) "-cn" }}
+{{- end }}
+
+{{- define "phoenixaiwarehouse.labels" -}}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
-{{- define "celerdatawarehouse.configmap.name" -}}
-{{- print (include "celerdatawarehouse.name" .) "-cm" }}
+{{- define "phoenixaiwarehouse.configmap.name" -}}
+{{- print (include "phoenixaiwarehouse.name" .) "-cm" }}
 {{- end }}
 
-{{- define "celerdatawarehouse.config" -}}
+{{- define "phoenixaiwarehouse.config" -}}
 cn.conf: |
 {{- if .Values.spec.config }}
 {{- .Values.spec.config | nindent 2 }}
@@ -23,10 +37,10 @@ cn.conf: |
 {{- end }}
 
 {{/*
-celerdatawarehouse.config.hash is used to calculate the hash value of the cn.conf, and due to the length limit, only
+phoenixaiwarehouse.config.hash is used to calculate the hash value of the cn.conf, and due to the length limit, only
 the first 8 digits are taken, which will be used as the annotations for pods.
 */}}
-{{- define "celerdatawarehouse.config.hash" }}
+{{- define "phoenixaiwarehouse.config.hash" }}
   {{- if .Values.spec.config }}
     {{- $hash := toJson .Values.spec.config | sha256sum | trunc 8 }}
     {{- printf "%s" $hash }}
@@ -35,11 +49,11 @@ the first 8 digits are taken, which will be used as the annotations for pods.
   {{- end }}
 {{- end }}
 
-{{- define "celerdatawarehouse.webserver.port" -}}
-{{- include "celerdatawarehouse.get.webserver.port" .Values.spec }}
+{{- define "phoenixaiwarehouse.webserver.port" -}}
+{{- include "phoenixaiwarehouse.get.webserver.port" .Values.spec }}
 {{- end }}
 
-{{- define "celerdatawarehouse.get.webserver.port" -}}
+{{- define "phoenixaiwarehouse.get.webserver.port" -}}
 {{- $config := index .config  -}}
 {{- $configMap := dict -}}
 {{- range $line := splitList "\n" $config -}}
@@ -53,18 +67,18 @@ the first 8 digits are taken, which will be used as the annotations for pods.
 {{- end }}
 {{- end }}
 
-{{- define "celerdatacluster.cn.data.suffix" -}}
+{{- define "phoenixaicluster.cn.data.suffix" -}}
 {{- print "-data" }}
 {{- end }}
 
-{{- define "celerdatacluster.cn.data.path" -}}
+{{- define "phoenixaicluster.cn.data.path" -}}
 {{- print "/opt/starrocks/cn/storage" }}
 {{- end }}
 
-{{- define "celerdatacluster.cn.log.suffix" -}}
+{{- define "phoenixaicluster.cn.log.suffix" -}}
 {{- print "-log" }}
 {{- end }}
 
-{{- define "celerdatacluster.cn.log.path" -}}
+{{- define "phoenixaicluster.cn.log.path" -}}
 {{- print "/opt/starrocks/cn/log" }}
 {{- end }}

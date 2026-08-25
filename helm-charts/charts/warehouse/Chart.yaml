@@ -1,6 +1,6 @@
 apiVersion: v2
 name: warehouse
-description: Warehouse is currently a feature of the CelerData Enterprise Edition.
+description: Warehouse is currently a feature of the PhoenixAI Enterprise Edition.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -14,12 +14,12 @@ type: application
 
 maintainers:
   - name: Ray Yan
-    email: ray.yan@celerdata.com
+    email: ray.yan@phoenixdata.ai
 
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 1.11.7
+version: 2.0.0
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
@@ -31,12 +31,12 @@ kubeVersion: ">=1.23.0-0"
 
 keywords:
   - operator
-  - celerdata
+  - phoenixai
   - database
   - olap
   - multi-warehouse
 
 sources:
-  - https://github.com/CelerData/celerdata-enterprise
+  - https://github.com/CelerData/phoenixai-kubernetes-operator
 
-home: https://github.com/celerdata/phoenixai-kubernetes-operator
+home: https://github.com/CelerData/phoenixai-kubernetes-operator

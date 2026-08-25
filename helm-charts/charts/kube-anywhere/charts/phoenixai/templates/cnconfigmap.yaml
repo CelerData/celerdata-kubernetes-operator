@@ -1,0 +1,13 @@
+{{- if and .Values.phoenixAICluster.enabledCn .Values.phoenixAICnSpec .Values.phoenixAICnSpec.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "phoenixaicluster.cn.configmap.name" . }}
+  namespace: {{ template "phoenixaicluster.namespace" . }}
+  labels:
+    cluster: {{ template "phoenixaicluster.name" . }}
+    app: "cn"
+data:
+  {{- include "phoenixaicluster.cn.config" . | nindent 2 }}
+
+{{- end }}

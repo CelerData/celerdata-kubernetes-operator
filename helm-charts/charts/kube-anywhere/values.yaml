@@ -1,0 +1,1659 @@
+
+# This file is generated from the subcharts' values.yaml — do not edit it by hand.
+# It mirrors every subchart value under its subchart key, so an install can override
+# any of them through the parent chart. Put your overrides in your own values file
+# (helm -f my-values.yaml), not here.
+
+operator:
+  # Default values for operator.
+  # This is a YAML-formatted file.
+  # Declare variables to be passed into your templates.
+  
+  global:
+    rbac:
+      # If set true, the clusterrole, clusterrolebinding, serviceaccount resources will be created for
+      # the operator. If changed to false later, these resources will be deleted.
+      # Note: By default the operator will watch all namespaces, so it needs clusterrole, clusterrolebinding to access resources.
+      #       If .Values.phoenixAIOperator.watchNamespace is set, the role and rolebinding will be created for the specified namespace.
+      create: true
+      serviceAccount:
+        name: "phoenixai"
+        # Optional annotations to add to the serviceaccount manifest
+        annotations: {}
+        # Optional labels to add to the serviceaccount manifest
+        labels: {}
+  
+  # TimeZone is used to set the environment variable TZ for pod, with UTC as the default.
+  timeZone: UTC
+  
+  # The prefix of the resources created by the operator chart (e.g. the operator Deployment is
+  # named <nameOverride>-operator and the gRPC query API Service <nameOverride>-api).
+  # Note: When upgrading a release that was installed with an older default (kube-phoenixai), keep
+  #       that old value here so the upgrade keeps the existing resource names.
+  nameOverride: "kube-anywhere"
+  
+  phoenixAIOperator:
+    # If enabled, the operator-related resources will be created, including the operator deployment, service account,
+    # clusterrole, clusterrolebinding, and service account.
+    enabled: true
+    # annotations for phoenixai operator.
+    annotations: {}
+    namespaceOverride: ""
+    image:
+      # image sliced by "repository:tag"
+      repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/operator
+      tag: v2.0.0
+    imagePullPolicy: Always
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 800Mi
+      requests:
+        cpu: 500m
+        memory: 400Mi
+    # By default, the operator will only set runAsNonRoot to true, allowPrivilegeEscalation to false, readOnlyRootFilesystem to true.
+    # You can customize the securityContext for operator pod, e.g., drop capabilities, seccompProfile, etc.
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      #capabilities:
+      #  drop:
+      #  - ALL
+      #seccompProfile:
+      #  type: "RuntimeDefault"
+    # imagePullSecrets allows you to use secrets to pull images for pods.
+    imagePullSecrets: []
+    # - name: "image-pull-secret"
+    # If specified, the pod's nodeSelector — a map of nodeSelectors to match when scheduling pods on nodes.
+    # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
+    nodeSelector: {}
+    # affinity for operator pod scheduling.
+    affinity: {}
+      # nodeAffinity:
+      #   requiredDuringSchedulingIgnoredDuringExecution:
+      #     nodeSelectorTerms:
+      #     - matchFields:
+      #       - key: metadata.name
+      #         operator: In
+      #         values:
+      #         - target-host-name
+    tolerations: []
+      # - key: "key"
+      #   operator: "Equal|Exists"
+      #   value: "value"
+      #   effect: "NoSchedule|PreferNoSchedule|NoExecute(1.6 only)"
+    # If specified, it will restrict operator to watch resources in the specified namespace. And
+    #  1. You must deploy your PhoenixAI cluster to the specified namespace.
+    #  2. You cannot assign multiple namespaces to watchNamespace field.
+    # Note: In most cases, you should not set this value. If your kubernetes cluster manages too many nodes, and
+    # the operator watching all namespaces uses too many memory resources, you can set this value.
+    # Defaults to all namespaces.
+    watchNamespace: ""
+    # Comma-separated list of namespaces to exclude from reconciliation.
+    # When specified, the operator will not reconcile StarRocks resources in these namespaces.
+    # This is useful when multiple operators manage different sets of namespaces.
+    # Note: This is different from watchNamespace - watchNamespace limits what the operator watches,
+    # while denyList excludes specific namespaces from reconciliation even if watching all namespaces.
+    # Precedence: denyList takes precedence over watchNamespace. If a namespace appears in both
+    # watchNamespace and denyList, the operator will watch that namespace but will NOT reconcile
+    # any resources in it. Avoid configuring conflicting values between these two settings.
+    # Example: "kube-system,kube-public,monitoring"
+    denyList: ""
+    # Enable automated PVC volume expansion for FE/BE/CN StatefulSets. Enabled by default: raising a
+    # component's storageSize in the values expands the PVCs in place (the StorageClass must have
+    # allowVolumeExpansion) instead of being rejected by the immutable StatefulSet volumeClaimTemplates.
+    # When true the operator pre-creates/expands PVCs and freezes the StatefulSet volumeClaimTemplates;
+    # requires an operator restart to toggle. Setting this true also renders the feature's RBAC (it
+    # implies enablePVCExpansionRBAC), so a single switch is enough for Helm users.
+    # Note: with the feature on, a live PVC that is LARGER than the declared storageSize fails the
+    # reconcile (the operator never shrinks volumes) — raise the storageSize to match, or set this
+    # to false to restore the old ignore-the-difference behavior.
+    enablePVCExpansion: true
+    # Render the PVC volume expansion RBAC (persistentvolumeclaims, storageclasses) WITHOUT enabling the
+    # feature itself (no --enable-pvc-expansion arg). Enabled by default so an install that turns
+    # enablePVCExpansion off keeps the cluster-scoped permissions pre-provisioned and can re-enable the
+    # feature later by just flipping that one switch, without re-applying RBAC.
+    enablePVCExpansionRBAC: true
+    # Ensure a PodDisruptionBudget (maxUnavailable: 1) per FE/BE/CN/FE-proxy component, so node
+    # drains / autoscaler evictions can never take down more than one replica of a component at a
+    # time. Enabled by default here (the chart's RBAC already grants policy/poddisruptionbudgets).
+    # Set false to make the operator never touch the PodDisruptionBudget API — required when it runs
+    # under hand-maintained RBAC that lacks poddisruptionbudgets permissions. Toggling requires an
+    # operator restart (the pod rolls on upgrade); user-created PDBs are never touched either way.
+    enablePodDisruptionBudget: true
+    # Expose a read-only gRPC query API server that lets the PhoenixAI Anywhere console query
+    # cluster/warehouse state in-cluster. On by default so the console
+    # (anywhere.enabled in the parent chart) can pair with the operator out of the box: the operator
+    # listens on apiServerPort and the chart also renders a ClusterIP Service for it. Set false to
+    # remove the listener and the Service; the console cannot serve this operator's clusters then.
+    enableApiServer: true
+    # Port the gRPC query API server binds to when enableApiServer is true.
+    apiServerPort: 9090
+    # How the operator's MySQL connection to FE negotiates TLS. Mirrors the MySQL client's
+    # --ssl-mode option:
+    #   DISABLED  - always plaintext. An FE with ssl_force_secure_transport=true rejects the
+    #               connection with error 5205 and logs a warning for every attempt.
+    #   PREFERRED - (default) encrypt when FE advertises SSL support, stay plaintext when it does
+    #               not, so a cluster without SSL configured behaves exactly as before.
+    #   REQUIRED  - always encrypt, and fail the connection when FE does not support SSL. Use this
+    #               to guarantee the operator never talks to FE in plaintext.
+    # The server certificate is never verified: the keystore FE's documentation generates is
+    # self-signed, so there is no CA to chain to and its name does not match FE's in-cluster
+    # service DNS name. Leave empty to use the operator's built-in default. Changing this value
+    # restarts the operator pod.
+    feSslMode: PREFERRED
+    # Additional operator container environment variables
+    # You specify this manually like you would a raw deployment manifest.
+    # Ref: https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
+    # operator supports the following environment variables:
+    # KUBE_PHOENIXAI_UNSUPPORTED_ENVS: "XXX,YYY" # The environment variables that will not be passed to phoenixai container.
+    env: []
+    # setting log related parameter
+    log:
+      - --zap-time-encoding=iso8601
+      - --zap-encoder=console
+      # to enable debug log, uncomment the following option
+      # - --zap-log-level 4
+    # Operator needs to specify the FQDN in nginx.conf when it set up fe-proxy service.
+    # By default, Operator will use cluster.local as the dnsDomainSuffix.
+    # If you set up a kubernetes cluster with a different dnsDomainSuffix, you need to set this value.
+    dnsDomainSuffix: ""
+    # By default, the volume name of secret and configmap created by operator for the FE/BE/CN pods has a hash suffix.
+    # If users plan to use a sidecar or init container to mount the same volume, it will be challenging to get the volume name.
+    # In this situation, you can set this value to false.
+    volumeNameWithHash: true
+
+phoenixai:
+  # =============================================================================
+  # Values for the phoenixai subchart (deploys the PhoenixAICluster CR).
+  #
+  # Top-level sections, in file order:
+  #   nameOverride           resource name prefix and the default cluster name
+  #   initPassword           set the root password on the FIRST deployment only
+  #   timeZone               TZ environment variable for all pods
+  #   datadog                Datadog log / metrics / profiling integration
+  #   metrics                Prometheus ServiceMonitor integration
+  #   phoenixAICluster       cluster-level settings: enable CN, disaster
+  #                          recovery, and componentValues shared by FE/CN
+  #   phoenixAIFeSpec        FE (frontend) component
+  #   phoenixAICnSpec        CN (compute node) component
+  #   secrets / configMaps   extra Secrets / ConfigMaps to create
+  #   resources              arbitrary extra Kubernetes resources to deploy
+  #   phoenixAIFeProxySpec   FE proxy (nginx) component
+  #
+  # The fields most deployments start with: phoenixAICluster.componentValues.image.tag,
+  # and per-component replicas / resources / storageSpec.
+  # =============================================================================
+  
+  # The prefix of the resources created by the phoenixai chart. It is also the default cluster name
+  # (phoenixAICluster.name falls back to it), so it prefixes every data-plane resource:
+  # StatefulSets, Services and PVCs (e.g. <nameOverride>-fe-*).
+  # Note: When upgrading a release that was installed with an older default (kube-phoenixai), keep
+  #       that old value here (or set phoenixAICluster.name to the existing cluster name) so the
+  #       upgrade keeps the existing StatefulSets and PVCs instead of recreating the data plane.
+  nameOverride: "kube-anywhere"
+  
+  # This configuration is used to modify the root password during initial deployment.
+  # After deployment is completed, it won't take effect to modify the password here and to do a `helm upgrade`.
+  # It also supports providing a secret name that contains a password, using the password in the secret instead of the plaintext in the values.yaml.
+  # When both password and passwordSecret are set, only passwordSecret takes effect.
+  # Note: If you install PhoenixAI using helm install without setting the initPassword, then for the following upgrade deployments,
+  #       you should also not set the initPassword.
+  #       If you install PhoenixAI using helm install and set the initPassword, please always retain the configuration of initPassword.
+  initPassword:
+    enabled: false
+    # Note: If you are using Argo CD to deploy the PhoenixAI cluster, you must set isInstall to false after the first installation.
+    # This is because Argo CD supports Helm like this: helm template <options> | kubectl apply -f -. If isInstall is true, the
+    # initPassword job will be executed every time you run the command.
+    # See https://github.com/argoproj/argo-cd/discussions/7496#discussioncomment-1609267 for more information
+    isInstall: true
+    password: ""
+    # The secret name that contains the password, the key of the secret is "password", and you should create it first.
+    passwordSecret: ""
+    # The image of the initPassword job, if it is not set, the FE image will be used.
+    # See https://github.com/StarRocks/starrocks-kubernetes-operator/issues/453 for why we need to set the image.
+    image: ""
+    # The annotations for the Job, not including the annotations for the pod.
+    annotations: {}
+    # The annotations for the Job's Pod, not including the annotations for the job.
+    podAnnotations: {}
+    # resources for init_job pod.
+    resources: {}
+    #resources:
+    #  requests:
+    #    cpu: 500m
+    #    memory: 400Mi
+    #  limits:
+    #    cpu: 500m
+    #    memory: 800Mi
+  
+  # TimeZone is used to set the environment variable TZ for pod, with UTC as the default.
+  timeZone: UTC
+  
+  # This configuration is used to integrate with an external system DataDog.
+  # You can enable the integration by setting the enabled to true, e.g., datadog.log.enabled=true will enable datadog agent
+  # to collect the log.
+  datadog:
+    log:
+      enabled: false
+      # besides the attributes you added, the chart will append "source" and "service" attributes to the log config.
+      # see https://docs.datadoghq.com/containers/kubernetes/log/?tab=operator for more details.
+      logConfig: '{}' # e.g., '{"app": "phoenixai", "tags": ["aa", "bb"]}'
+      # Enable multiline log parsing rules compatible with the Datadog agent. Enabled by default so
+      # stack traces are ingested as one event; only takes effect when log.enabled is true.
+      # When true, a log_processing_rules entry of type "multi_line" is added to the log annotation.
+      # FE nodes use a Java (log4j) timestamp pattern; CN nodes use a C++ glog timestamp pattern.
+      # If logConfig already contains "log_processing_rules", it takes priority and this flag is ignored.
+      enableMultilineLogParsing: true
+    metrics:
+      enabled: false
+    profiling:
+      fe: false # change to 'true' to enable profiling on FE pods;
+      cn: false # change to 'true' to enable profiling on CN pods;
+      env: "phoenixai-default" # the default value for DD_ENV;
+      configMode: "service" # see https://docs.datadoghq.com/containers/cluster_agent/admission_controller/?tab=operator#configure-apm-and-dogstatsd-communication-mode
+  
+  # This configuration is used to integrate with the external system Prometheus.
+  metrics:
+    serviceMonitor:
+      # Whether to expose metrics to Prometheus by ServiceMonitor.
+      # Note: make sure the prometheus operator is installed in your cluster.
+      # If prometheus is not installed by operator, you can add annotations on k8s service to expose metrics.
+      # See https://github.com/CelerData/phoenixai-kubernetes-operator/blob/main/doc/Monitor/integration-prometheus-grafana.md#51-turn-on-the-prometheus-metrics-scrape-by-adding-annotations for more details.
+      enabled: false
+      # Prometheus ServiceMonitor labels
+      labels: {}
+      # scraper: prometheus-operator
+      # Prometheus ServiceMonitor interval
+      interval: 15s
+      # Whether to enable basic auth
+      basicAuth:
+        enabled: false
+        # The name of the secret that contains the username for basic auth.
+        # The secret should contain a key named "username".
+        usernameSecretName: ""
+        # The key in the secret that contains the username for basic auth.
+        usernameSecretKey: ""
+        # The name of the secret that contains the password for basic auth.
+        # The secret should contain a key named "password".
+        passwordSecretName: ""
+        # The key in the secret that contains the password for basic auth.
+        passwordSecretKey: ""
+      # Whether to enable request parameters for the ServiceMonitor.
+      endpointParam:
+        enabled: false
+        # the parameters for the ServiceMonitor.
+        # params:
+        #    with_materialized_view_metrics:
+        #      - "all"
+        params: {}
+  
+  # =============================================================================
+  # Cluster-level settings
+  # =============================================================================
+  
+  # deploy a phoenixai cluster
+  phoenixAICluster:
+    # the name of phoenixAICluster cluster, if not set, the value of nameOverride fields will be used.
+    name: ""
+    # the namespace of phoenixAICluster cluster, if not set, the release namespace will be used.
+    namespace: ""
+    # annotations for phoenixai cluster.
+    annotations: {}
+    # specify the CN deployment or not.
+    enabledCn: true
+    # When true, the operator waits for the FE StatefulSet to be fully rolled out (all replicas ready
+    # and at the same revision) before updating CN. This prevents a bad FE rollout from cascading
+    # to CN. Enabled by default; set false to restore the old behavior where CN is updated in
+    # parallel with a still-rolling FE.
+    waitForFullRollout: true
+    # Disaster recovery configuration. If you want to enable disaster recovery, you need to set the enabled field to true.
+    # Note:
+    #  1. If you are using an existing PhoenixAI cluster, you need to clean up the meta of the FE component and the data of the CN
+    #     component before enabling disaster recovery. So it is better to use an empty PhoenixAI cluster to start disaster recovery.
+    #  2. After disaster recovery, Operator will reboot the cluster as a normal cluster automatically, so if you need more checks by yourself,
+    #     you can
+    #       1. Set the replicas of FE component to 1
+    #       2. Set enabledCn to be false to disable to deploy the CN component.
+    #  3. Generation field is used to run multiple times for disaster recovery. For example, if the last disaster recovery is
+    #     not what you want, you can modify related configurations and increase the generation value to run a new disaster recovery.
+    disasterRecovery:
+      # enabled: true
+      # generation: 1
+    # componentValues field is used to define values for all phoenixai cluster components, including phoenixAIFeSpec
+    # and phoenixAICnSpec, not including phoenixAIFeProxySpec. So that you do not need to modify them in
+    # their own spec.
+    # Note:
+    #   1. The values in their own spec will take precedence over the values in this field.
+    #   2. The values in their own spec will replace all the values in this field, not merge.
+    componentValues:
+      image:
+        tag: "4.1-latest"
+      # hostAliases allows adding entries to /etc/hosts inside the containers.
+      hostAliases: []
+        # - ip: "127.0.0.1"
+        #   hostnames:
+        #   - "example.com"
+      # If runAsNonRoot is true, the container is run as a non-root user.
+      # The userId will be set to 1000, and the groupID will be set to 1000.
+      # Enabled by default: this is the single switch that decides whether FE/CN run as non-root
+      # (phoenixAIFeSpec.runAsNonRoot / phoenixAICnSpec.runAsNonRoot default to false, which means
+      # "inherit this value"; setting one of them to true only forces non-root for that component).
+      # Note: A cluster whose containers previously ran as root has files owned by root under the
+      #       mounted directories; a non-root user has no permission to access them. For such an
+      #       existing cluster set runAsNonRoot to false here, or fix the file ownership first.
+      runAsNonRoot: true
+      # schedulerName allows you to specify which scheduler will be used for your pods.
+      schedulerName: ""
+      # serviceAccount for access cloud service.
+      serviceAccount: ""
+      # imagePullSecrets allows you to use secrets to pull images for pods.
+      imagePullSecrets: []
+      # - name: "image-pull-secret"
+      # tolerations for pod scheduling to nodes with taints
+      # Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+      tolerations: []
+        # e.g., tolerate the taint created by:
+        #   kubectl taint nodes <node> dedicated=phoenixai:NoSchedule
+        # - key: "dedicated"
+        #   operator: "Equal"
+        #   value: "phoenixai"
+        #   effect: "NoSchedule"
+      # topologySpreadConstraints for scheduling pods across failure-domains.
+      # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
+      topologySpreadConstraints: []
+        # Because componentValues is shared by FE/CN, the labelSelector in the example below
+        # matches both components, so the skew is computed
+        # over their pods combined. To spread each component independently (usually what you
+        # want), set topologySpreadConstraints in phoenixAIFeSpec /
+        # phoenixAICnSpec instead — see the examples there.
+        # - maxSkew: 1
+        #   topologyKey: kubernetes.io/hostname
+        #   whenUnsatisfiable: ScheduleAnyway
+        #   labelSelector:
+        #     matchExpressions:
+        #     - key: app.kubernetes.io/component
+        #       operator: In
+        #       values:
+        #       - fe
+        #       - cn
+      # If specified, the pod's nodeSelector — a map of nodeSelectors to match when scheduling pods on nodes.
+      # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
+      nodeSelector: {}
+        # kubernetes.io/arch: amd64
+        # kubernetes.io/os: linux
+      # affinity for pod scheduling.
+      affinity: {}
+        # Because componentValues is shared by FE/CN, the podAntiAffinity selector below
+        # matches both components, so
+        # pods of ANY component prefer to avoid nodes already running any FE/CN pod. To keep
+        # only same-component replicas apart, set affinity in phoenixAIFeSpec /
+        # phoenixAICnSpec instead — see the examples there.
+        # podAntiAffinity:
+        #   preferredDuringSchedulingIgnoredDuringExecution:
+        #   - weight: 100
+        #     podAffinityTerm:
+        #       labelSelector:
+        #         matchExpressions:
+        #         - key: app.kubernetes.io/component
+        #           operator: In
+        #           values:
+        #           - fe
+        #           - cn
+        #       topologyKey: kubernetes.io/hostname
+        # The nodeAffinity example below pins pods to a specific node: replace target-host-name
+        # with a real node name (see `kubectl get nodes`) before use.
+        # nodeAffinity:
+        #   requiredDuringSchedulingIgnoredDuringExecution:
+        #     nodeSelectorTerms:
+        #     - matchFields:
+        #       - key: metadata.name
+        #         operator: In
+        #         values:
+        #         - target-host-name
+      # the pod labels for user select or classify pods.
+      podLabels: {}
+  
+  # =============================================================================
+  # FE component
+  # =============================================================================
+  
+  # spec to deploy fe.
+  phoenixAIFeSpec:
+    # number of replicas to deploy for a FE statefulset.
+    replicas: 1
+    image:
+      # image sliced by "repository:tag"
+      repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/fe-ubuntu
+      tag: ""
+    imagePullPolicy: IfNotPresent
+    # Specify the entrypoint for FE.
+    # By default, the operator will use '/opt/starrocks/fe_entrypoint.sh' as a command and use '$(FE_SERVICE_NAME)' as args in the container spec.
+    # If the entrypoint is set, the command will be ["bash", "-c"], and the args will be a filename of the entrypoint script.
+    # A configmap with the name $cluster-fe-entrypoint-script will be created, and the script will be mounted to /etc/phoenixai/entrypoint.sh
+    # Pod will be restarted if the entrypoint script is updated.
+    entrypoint: {}
+      # script: |
+      #   #! /bin/bash
+      #   echo "do something before start fe"
+      #   exec /opt/starrocks/fe_entrypoint.sh $FE_SERVICE_NAME
+    # add annotations for FE pods. For example, if you want to config monitor for datadog, you can config the annotations.
+    annotations: {}
+    # If runAsNonRoot is true, the container is run as a non-root user.
+    # The userId will be set to 1000, and the groupID will be set to 1000.
+    # false means "inherit phoenixAICluster.componentValues.runAsNonRoot" (which defaults to true);
+    # setting true here forces non-root for FE only. To run as root, set
+    # phoenixAICluster.componentValues.runAsNonRoot to false instead.
+    runAsNonRoot: false
+    # Whether this container has a read-only root filesystem.
+    # Note: Verify that your image version supports a read-only root filesystem before enabling
+    #       it. As of version 3.3.6 the FE/CN containers do NOT support it yet.
+    readOnlyRootFilesystem: false
+    # add/drop capabilities for FE container.
+    capabilities: {}
+      #  add:
+      #    - PERFMON
+      #    - SYS_PTRACE
+      #  drop:
+      #    - SYS_ADMIN
+    # set sysctls for FE pod.
+    # See https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/ for how to set sysctls.
+    # Note: The use of unsafe sysctls is at-your-own-risk and can lead to severe problems
+    sysctls: []
+      # - name: net.ipv4.ip_unprivileged_port_start
+      #   value: "2048"
+    # specify the service name and port config and serviceType
+    # the service type refers https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+    service:
+      # the FE service type, only supported ClusterIP, NodePort, LoadBalancer
+      type: "ClusterIP"
+      # The static IP for the service when type is LoadBalancer and this field is not empty.
+      # Note: the field name is loadbalancerIP (historical spelling), not loadBalancerIP.
+      loadbalancerIP: ""
+      # add annotations for external FE service.
+      annotations: {}
+      # Add labels for external FE service. The operator may add its own default labels.
+      labels: {}
+      # Config the service port for FE service.
+      # To assign a specific port or nodePort to a service, you should specify them by the corresponding name or
+      # containerPort in the service configuration. If both containerPort and name are specified, containerPort takes precedence.
+      # For fe, port name can be http, query, rpc, edit-log, and their default container port is 8030, 9030, 9020, 9010.
+      ports: []
+        # e.g., specify a dedicated node port for FE service by containerPort.
+        # - nodePort: 30030 # The range of valid ports is 30000-32767
+        #   containerPort: 8030 # The port exported on the container
+      # specifies the source IP ranges for the load balancer when the type=LoadBalancer.
+      loadBalancerSourceRanges: []
+        # - 10.0.0.0/8
+      # specifies how nodes distribute service traffic. Possible values: Cluster, Local.
+      # Only applies when the type is NodePort or LoadBalancer. Local preserves the client source IP.
+      externalTrafficPolicy: ""
+    # imagePullSecrets allows you to use secrets to pull images for pods.
+    imagePullSecrets: []
+      # - name: "image-pull-secret"
+    # serviceAccount for FE access cloud service.
+    serviceAccount: ""
+    # If specified, the pod's nodeSelector — a map of nodeSelectors to match when scheduling pods on nodes.
+    # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
+    nodeSelector: {}
+      # kubernetes.io/arch: amd64
+      # kubernetes.io/os: linux
+    # the pod labels for user select or classify pods.
+    podLabels: {}
+    # hostAliases allows adding entries to /etc/hosts inside the containers
+    hostAliases: []
+      # - ip: "127.0.0.1"
+      #   hostnames:
+      #   - "example.com"
+    # schedulerName allows you to specify which scheduler will be used for your pods.
+    schedulerName: ""
+    # Additional FE container environment variables.
+    # See https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/ for how to define environment variables.
+    # Note: If you use slice to define environment variables, and if there are multiple values files, the values in the last values file will take effect.
+    #       If you use a map to define environment variables, the values will be merged.
+    #       You can only use one of the manners to define environment variables.
+    # To avoid the different types of feEnvVars, we do not define the default value of feEnvVars, e.g., feEnvVars: [] or feEnvVars: {}.
+    #feEnvVars:
+      # define environment variables by slice.
+      # E.g., static environment variable:
+      # - name: DEMO_GREETING
+      #   value: "Hello from the environment"
+      # e.g., secret environment variable:
+      # - name: USERNAME
+      #   valueFrom:
+      #     secretKeyRef:
+      #       name: mysecret
+      #       key: username
+    # affinity for FE pod scheduling.
+    # Note: It will affect the scheduling of the init-password job.
+    affinity: {}
+      # The podAntiAffinity example below makes FE pods prefer
+      # to run on different nodes (best-effort, so pods are still schedulable when there are fewer
+      # nodes than replicas). To strictly forbid co-location, use
+      # requiredDuringSchedulingIgnoredDuringExecution instead — but note pods stay Pending when
+      # it cannot be satisfied.
+      # podAntiAffinity:
+      #   preferredDuringSchedulingIgnoredDuringExecution:
+      #   - weight: 100
+      #     podAffinityTerm:
+      #       labelSelector:
+      #         matchLabels:
+      #           app.kubernetes.io/component: fe
+      #       topologyKey: kubernetes.io/hostname
+      # The nodeAffinity example below pins FE pods to a specific node: replace target-host-name
+      # with a real node name (see `kubectl get nodes`) before use.
+      # nodeAffinity:
+      #   requiredDuringSchedulingIgnoredDuringExecution:
+      #     nodeSelectorTerms:
+      #     - matchFields:
+      #       - key: metadata.name
+      #         operator: In
+      #         values:
+      #         - target-host-name
+    # Node tolerations for FE pod scheduling to nodes with taints
+    # Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+    # Note: It will affect the scheduling of the init-password job.
+    tolerations: []
+      # e.g., tolerate the taint created by:
+      #   kubectl taint nodes <node> dedicated=phoenixai:NoSchedule
+      # - key: "dedicated"
+      #   operator: "Equal"
+      #   value: "phoenixai"
+      #   effect: "NoSchedule"
+    # topologySpreadConstraints for scheduling pods across failure-domains.
+    # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
+    topologySpreadConstraints: []
+      # The example below spreads FE pods evenly across
+      # nodes (best-effort). Set topologyKey to topology.kubernetes.io/zone to spread across
+      # availability zones instead. Prefer ScheduleAnyway (a soft constraint): DoNotSchedule
+      # keeps pods Pending when the constraint cannot be satisfied, e.g. fewer nodes than replicas.
+      # - maxSkew: 1
+      #   topologyKey: kubernetes.io/hostname
+      #   whenUnsatisfiable: ScheduleAnyway
+      #   labelSelector:
+      #     matchLabels:
+      #       app.kubernetes.io/component: fe
+    # resources for FE pod.
+    resources:
+      requests:
+        cpu: 4
+        memory: 4Gi
+      # If you want to remove one resource limit, e.g., cpu, you can set it to cpu: "unlimited".
+      limits:
+        cpu: 8
+        memory: 8Gi
+    # FE storageSpec for persistent metadata.
+    # Note: Once set, the following fields will not be allowed to be modified.
+    storageSpec:
+      # The name prefix of the volumes to mount. Defaults to `fe`, so FE metadata (and the log, see
+      # logStorageSize) is persisted on PVCs — losing the FE metadata means losing the cluster, so
+      # the ephemeral alternative is only for throwaway environments.
+      # Set it to "" to fall back to `emptyDir` volumes, which are ephemeral and whose data
+      # is lost on every pod restart.
+      # Note: A StatefulSet's volume set is fixed at creation. For an existing cluster that was
+      #       created with the old `emptyDir` default, keep this set to "" — switching an existing
+      #       cluster to persistent storage requires recreating the StatefulSet.
+      # Note: If the values of the following mountPaths are not default, you must set the name to fe.
+      name: "fe"
+      # The storageClassName represent the used storageclass name. If not set will use k8s cluster default storageclass.
+      # You must set a name when you set storageClassName.
+      # Note: Because hostPath field is not supported here, hostPath is not allowed to be set in storageClassName.
+      storageClassName: ""
+      # the persistent volume size for data.
+      # FE container stops running if the disk-free space which the FE meta-directory residents is less than 5Gi.
+      storageSize: 10Gi
+      # If storageMountPath is empty, the storageMountPath will be set to /opt/starrocks/fe/meta.
+      storageMountPath: ""
+      # If not set will use the value of the storageClassName field.
+      logStorageClassName: ""
+      # Setting this parameter can persist log storage, and the mount path is /opt/starrocks/fe/log.
+      # If you set it to 0Gi, the related PVC will not be created, and the log will not be persisted.
+      logStorageSize: 5Gi
+      # If logMountPath is empty, the logMountPath will be set to /opt/starrocks/fe/log.
+      # If logMountPath is not /opt/starrocks/fe/log, you must add in config the following configuration:
+      #    dump_log_dir = xxx
+      #    sys_log_dir = xxx
+      #    audit_log_dir = xxx
+      logMountPath: ""
+    # mount emptyDir volumes if necessary.
+    # Note: please use storageSpec field for persistent metadata and log.
+    emptyDirs: []
+      # e.g., mount an emptyDir volume to /tmp
+      # - name: tmp-data
+      #   mountPath: /tmp
+    # mount hostPath volumes if necessary.
+    # Note: please use storageSpec field for persistent storage data and log.
+    hostPaths: []
+      # e.g., mount a hostPath volume to /tmp
+      # - name: tmp-data
+      #   hostPath:
+      #     path: /tmp
+      #     type: Directory
+      #   mountPath: /tmp
+    # mount CSI ephemeral inline volumes if necessary.
+    # Unlike storageSpec, no PersistentVolumeClaim is created: the volume is published by the CSI
+    # driver when the pod starts and is torn down with the pod. The driver must already be installed
+    # in the cluster.
+    csiVolumes: []
+      # e.g., mount the SPIFFE workload API socket provided by the SPIFFE CSI driver
+      # - name: spiffe-workload-api
+      #   mountPath: /spiffe-workload-api
+      #   # readOnly here mounts it read-only inside the container; csi.readOnly below asks the
+      #   # driver to publish the volume read-only. Set both for a genuinely read-only mount.
+      #   readOnly: true
+      #   csi:
+      #     driver: csi.spiffe.io
+      #     readOnly: true
+    # persistentVolumeClaimRetentionPolicy specifies the retention policy for PersistentVolumeClaims associated with the component.
+    # The whenDeleted field is supported for all components, and it determines whether to delete PVCs when the StatefulSet is deleted.
+    #	The whenScaled field is only supported for the CN component.
+    persistentVolumeClaimRetentionPolicy:
+      # whenDeleted: Delete
+    # the config for starting fe. the base information as follows.
+    # Note: Keep -Xmx in JAVA_OPTS in sync with resources.limits.memory (recommended: about 75%
+    #       of the limit). A heap as large as the container memory limit risks the FE pod being
+    #       OOM-killed.
+    config: |
+      LOG_DIR = ${STARROCKS_HOME}/log
+      DATE = "$(date +%Y%m%d-%H%M%S)"
+      JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true -Xmx8192m -XX:+UseG1GC -Xlog:gc*:${LOG_DIR}/fe.gc.log.$DATE:time"
+      http_port = 8030
+      rpc_port = 9020
+      query_port = 9030
+      edit_log_port = 9010
+      mysql_service_nio_enabled = true
+      sys_log_level = INFO
+      # When shutting down FE, it will wait for min_graceful_exit_time_second seconds before refusing new requests. If you
+      # want to ensure that queries, writes, and other operations complete smoothly, you need to ensure that the time it
+      # takes for the Pod to become Not Ready is less than min_graceful_exit_time_second. The default Pod configuration is
+      # probe.FailureThreshold = 3, probe.PeriodSeconds = 5, so in the worst case, the Pod will have (3+1)*5 = 20s to
+      # transition to Node Not Ready state. Since the default value of min_graceful_exit_time_second is 15, we change it to a larger value.
+      # Note: PhoenixAI version must be greater than or equal to 3.4.2 to support this configuration, otherwise it will not take effect.
+      min_graceful_exit_time_second = 25
+    # A map object for setting the FE config. When configyaml is set to non-empty, the configs in configyaml will take
+    # precedence and values in the config field will be discarded.
+    # Note: When using configyaml, the number needs to be quoted to avoid being converted to scientific notation.
+    #       E.g., brpc_socket_max_unwritten_bytes: "10737418240"
+    configyaml: {}
+    # mount secrets if necessary.
+    # see https://kubernetes.io/docs/concepts/storage/volumes/#using-subpath for more details about subPath.
+    secrets: []
+      # e.g., mount my-secret to /etc/my-secret
+      # - name: my-secret
+      #   mountPath: /etc/my-secret
+      #   subPath: ""
+    # mount configmaps if necessary.
+    # see https://kubernetes.io/docs/concepts/storage/volumes/#using-subpath for more details about subPath.
+    configMaps: []
+      # e.g., mount my-configmap to /etc/my-configmap
+      # - name: my-configmap
+      #   mountPath: /etc/my-configmap
+      #   subPath: ""
+    # terminationGracePeriodSeconds defines duration in seconds the FE pod needs to terminate gracefully.
+    # the default value is 120 seconds
+    terminationGracePeriodSeconds: 120
+    # StartupProbeFailureSeconds defines the total failure seconds of a startup Probe.
+    # the default value is 300 seconds
+    # You can set it to "0" to disable the probe.
+    startupProbeFailureSeconds:
+    # LivenessProbeFailureSeconds defines the total failure seconds of a liveness Probe.
+    # the default value is 15 seconds
+    # You can set it to "0" to disable the probe.
+    livenessProbeFailureSeconds:
+    # ReadinessProbeFailureSeconds defines the total failure seconds of a readiness Probe.
+    # the default value is 15 seconds
+    # You can set it to "0" to disable the probe.
+    readinessProbeFailureSeconds:
+    # minReadySeconds specifies the minimum number of seconds for which a newly created pod should be ready
+    # without any of its container crashing, for it to be considered available.
+    # Defaults to 0 (pod will be considered available as soon as it is ready).
+    # see https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#minimum-ready-seconds for more details.
+    # Note: This field takes effect only when podManagementPolicy is set to OrderedReady.
+    minReadySeconds: 0
+    # podManagementPolicy controls how pods are created during initial scale up, when replacing pods on nodes, or when scaling down.
+    # The default policy is OrderedReady, the same as statefulset's default policy, so FE pods are created/removed one by
+    # one in order instead of in parallel.
+    # Note: If you have changed this field, then the related statefulset object need to be recreated, or there will be an error like this:
+    #       updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy',
+    #       'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden
+    podManagementPolicy: OrderedReady
+    # Lifecycle describes actions that the management system should take in response to container lifecycle events.
+    # By default, Operator will add corresponding preStop hooks for different components. For example, the preStop
+    # script for the FE Component is /opt/starrocks/fe_prestop.sh,
+    # and for the CN Component is /opt/starrocks/cn_prestop.sh.
+    # You can set postStart hook.
+    lifecycle: {}
+      # postStart:
+      #   exec:
+      #     command:
+      #     - /bin/sh
+      #     - -c
+      #     - echo "Hello, world!"
+    # Sidecars is an optional list of containers that are run in the same pod as the phoenixai component.
+    # You can use this field to launch helper containers that provide additional functionality to the main container.
+    # See https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#Container for how to define sidecars.
+    sidecars: []
+      # - name: sidecar-container
+      #   image: busybox
+      #   # If phoenixAIFeSpec.storageSpec.name is FE or not set, you can mount the volume of meta like this.
+      #   command: ['sh', '-c', 'echo "hello from the sidecar container" >/opt/starrocks/fe/meta/sidecar-data.txt && sleep 3600']
+      #   volumeMounts:
+      #   - mountPath: /opt/starrocks/fe/meta
+      #     name: fe-meta # append '-meta' to the end of the name of the phoenixAIFeSpec.storageSpec.name
+    # sidecarsMap is an optional map of containers that are run in the same pod as the phoenixai component.
+    # The reason for using sidecarsMap please refer to https://github.com/StarRocks/starrocks-kubernetes-operator/issues/618
+    # sidecarsMap has higher priority than sidecars, and the key of sidecarsMap is the name of the sidecar container.
+    sidecarsMap: {}
+      # sidecar-container:
+      #   image: busybox
+      #   # If phoenixAIFeSpec.storageSpec.name is FE or not set, you can mount the volume of meta like this.
+      #   command: ['sh', '-c', 'echo "hello from the sidecar container" >/opt/starrocks/fe/meta/sidecar-data.txt && sleep 3600']
+      #   volumeMounts:
+      #   - mountPath: /opt/starrocks/fe/meta
+      #     name: fe-meta # append '-meta' to the end of the name of the phoenixAIFeSpec.storageSpec.name
+    # initContainers is an optional list of containers that are run in the same pod as the phoenixai component.
+    # You can use this to launch helper containers that run before the main container starts.
+    # See https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#Container for how to configure a container.
+    initContainers: []
+      # - name: init-container
+      #   image: busybox
+      #   # If phoenixAIFeSpec.storageSpec.name is FE or not set, you can mount the volume of meta like this.
+      #   command: ['sh', '-c', 'echo "hello from the init container" >/opt/starrocks/fe/meta/init-data.txt']
+      #   volumeMounts:
+      #   - mountPath: /opt/starrocks/fe/meta
+      #     name: fe-meta # append '-meta' to the end of the phoenixAIFeSpec.storageSpec.name
+    # Max unavailable pods for the FE component when doing rolling update.
+    # This field cannot be 0. The default setting is 1.
+    # Note: Because Operator uses statefulset to manage this component, the maxUnavailable field is in Alpha stage, and it is honored
+    # only by API servers that are running with the MaxUnavailableStatefulSet feature gate enabled.
+    # See https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#maximum-unavailable-pods for more details.
+    maxUnavailablePods:
+    # Share a single process namespace between all of the containers in a pod.
+    # When this is set, containers will be able to view and signal processes from other containers
+    # in the same pod, and the first process in each container will not be assigned PID 1.
+    shareProcessNamespace:
+  
+  # =============================================================================
+  # CN component
+  # =============================================================================
+  
+  # spec for compute node, compute node provide compute function.
+  phoenixAICnSpec:
+    # Number of replicas to deploy for the CN component.
+    #
+    # When autoscaling of the CN statefulset is used, the `replicas` field is set to null
+    # by the operator, and autoscaling is controlled by Horizontal Pod Autoscaling (HPA).
+    # You should only uncomment and set the `replicas` field if autoscaling is disabled.
+    # replicas: 1
+    image:
+      # image sliced by "repository:tag"
+      repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu
+      tag: ""
+    imagePullPolicy: IfNotPresent
+    # Specify the entrypoint for CN.
+    # By default, the operator will use '/opt/starrocks/cn_entrypoint.sh' as command, and use '$(FE_SERVICE_NAME)' as args in container spec.
+    # If the entrypoint is set, the command will be ["bash", "-c"], and the args will be a filename of the entrypoint script.
+    # A configmap with the name $cluster-cn-entrypoint-script will be created, and the script will be mounted to /etc/phoenixai/entrypoint.sh
+    # Pod will be restarted if the entrypoint script is updated.
+    entrypoint: {}
+      # script: |
+      #   #! /bin/bash
+      #   echo "do something before start cn"
+      #   exec /opt/starrocks/cn_entrypoint.sh $FE_SERVICE_NAME
+    # serviceAccount for CN access cloud service.
+    serviceAccount: ""
+    # add annotations for CN pods. for example, if you want to config monitor for datadog, you can config the annotations.
+    annotations: {}
+    # If runAsNonRoot is true, the container is run as a non-root user.
+    # The userId will be set to 1000, and the groupID will be set to 1000.
+    # false means "inherit phoenixAICluster.componentValues.runAsNonRoot" (which defaults to true);
+    # setting true here forces non-root for CN only. To run as root, set
+    # phoenixAICluster.componentValues.runAsNonRoot to false instead.
+    runAsNonRoot: false
+    # Whether this container has a read-only root filesystem.
+    # Note: Verify that your image version supports a read-only root filesystem before enabling
+    #       it. As of version 3.3.6 the FE/CN containers do NOT support it yet.
+    readOnlyRootFilesystem: false
+    # add/drop capabilities for CN container.
+    capabilities: {}
+      #  add:
+      #    - PERFMON
+      #    - SYS_PTRACE
+      #  drop:
+      #    - SYS_ADMIN
+    # set sysctls for CN pod.
+    # See https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/ for how to set sysctls.
+    # Note: The use of unsafe sysctls is at-your-own-risk and can lead to severe problems
+    sysctls: []
+      # - name: net.ipv4.ip_unprivileged_port_start
+      #   value: "2048"
+    # specify the service name and port config and serviceType
+    # the service type refers https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+    service:
+      # the CN service type, only supported ClusterIP, NodePort, LoadBalancer
+      type: "ClusterIP"
+      # The static IP for the service when type is LoadBalancer and this field is not empty.
+      # Note: the field name is loadbalancerIP (historical spelling), not loadBalancerIP.
+      loadbalancerIP: ""
+      # add annotations for external CN service.
+      annotations: {}
+      # Add labels for external CN service. The operator may add its own default labels.
+      labels: {}
+      # Config the service port for CN service.
+      # To assign a specific port or nodePort to a service, you should specify them by the corresponding name or
+      # containerPort in the service configuration. If both containerPort and name are specified, containerPort takes precedence.
+      # For cn, the port name can be webserver, heartbeat, brpc, thrift, and their default container port is 8040, 9050, 8060, 9060.
+      ports: []
+        # e.g., specify a dedicated node port for CN service by containerPort.
+        # - nodePort: 30040 # The range of valid ports is 30000-32767
+        #   containerPort: 8040 # The port on the container to expose.
+      # Specify the source IP ranges for the load balancer when the type=LoadBalancer.
+      loadBalancerSourceRanges: []
+        # - 10.0.0.0/8
+      # Specify how nodes distribute service traffic. Possible values: Cluster, Local.
+      # Only applies when the type is NodePort or LoadBalancer. Local preserves the client source IP.
+      externalTrafficPolicy: ""
+    # imagePullSecrets allows you to use secrets for pulling images for your pods.
+    imagePullSecrets: []
+      # - name: "image-pull-secret"
+    # If specified, the pod's nodeSelector — a map of nodeSelectors to match when scheduling pods on nodes.
+    # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
+    nodeSelector: {}
+      # kubernetes.io/arch: amd64
+      # kubernetes.io/os: linux
+    # the pod labels for user select or classify pods.
+    podLabels: {}
+    ## hostAliases allows adding entries to /etc/hosts inside the containers
+    hostAliases: []
+      # - ip: "127.0.0.1"
+      #   hostnames:
+      #   - "example.com"
+    # schedulerName allows you to specify which scheduler will be used for the pod
+    schedulerName: ""
+    # CN container environment variables.
+    # See https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/ for how to define environment variables.
+    # Note: If you use slice to define environment variables, and if there are multiple values files, the values in the last values file will take effect.
+    #       If you use a map to define environment variables, the values will be merged.
+    #       You can only use one of the manners to define environment variables.
+    # To avoid a different type of cnEnvVars, we do not define the default value of cnEnvVars, e.g., cnEnvVars: [] or cnEnvVars: {}.
+    # cnEnvVars:
+      # define environment variables by slice.
+      # E.g., static environment variable:
+      # - name: DEMO_GREETING
+      #   value: "Hello from the environment"
+      # e.g., secret environment variable:
+      # - name: USERNAME
+      #   valueFrom:
+      #     secretKeyRef:
+      #       name: mysecret
+      #       key: username
+    # affinity for CN pod scheduling.
+    affinity: {}
+      # The podAntiAffinity example below makes CN pods prefer
+      # to run on different nodes (best-effort, so pods are still schedulable when there are fewer
+      # nodes than replicas). To strictly forbid co-location, use
+      # requiredDuringSchedulingIgnoredDuringExecution instead — but note pods stay Pending when
+      # it cannot be satisfied.
+      # podAntiAffinity:
+      #   preferredDuringSchedulingIgnoredDuringExecution:
+      #   - weight: 100
+      #     podAffinityTerm:
+      #       labelSelector:
+      #         matchLabels:
+      #           app.kubernetes.io/component: cn
+      #       topologyKey: kubernetes.io/hostname
+      # The nodeAffinity example below pins CN pods to a specific node: replace target-host-name
+      # with a real node name (see `kubectl get nodes`) before use.
+      # nodeAffinity:
+      #   requiredDuringSchedulingIgnoredDuringExecution:
+      #     nodeSelectorTerms:
+      #       - matchFields:
+      #           - key: metadata.name
+      #             operator: In
+      #             values:
+      #               - target-host-name
+    # Node tolerations for CN pod scheduling to nodes with taints
+    # Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+    tolerations: []
+      # e.g., tolerate the taint created by:
+      #   kubectl taint nodes <node> dedicated=phoenixai:NoSchedule
+      # - key: "dedicated"
+      #   operator: "Equal"
+      #   value: "phoenixai"
+      #   effect: "NoSchedule"
+    # topologySpreadConstraints for scheduling pods across failure-domains.
+    # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
+    topologySpreadConstraints: []
+      # The example below spreads CN pods evenly across
+      # nodes (best-effort). Set topologyKey to topology.kubernetes.io/zone to spread across
+      # availability zones instead. Prefer ScheduleAnyway (a soft constraint): DoNotSchedule
+      # keeps pods Pending when the constraint cannot be satisfied, e.g. fewer nodes than replicas.
+      # - maxSkew: 1
+      #   topologyKey: kubernetes.io/hostname
+      #   whenUnsatisfiable: ScheduleAnyway
+      #   labelSelector:
+      #     matchLabels:
+      #       app.kubernetes.io/component: cn
+    autoScalingPolicy: {}
+      # If version is not set, the operator picks the HPA (Horizontal Pod Autoscaler) version
+      # automatically based on your Kubernetes version: autoscaling/v2 on Kubernetes >= 1.26,
+      # autoscaling/v2beta2 on older clusters. Only set it (v1, v2beta2, v2) to override that
+      # choice — note that the v2beta2 API was removed in Kubernetes 1.26.
+      # version: v2
+      # maxReplicas: 10
+      # minReplicas: 1
+      # hpaPolicy:
+      #   metrics:
+      #   - type: Resource
+      #     resource:
+      #       name: memory
+      #       target:
+      #         averageUtilization: 30
+      #         type: Utilization
+      #   - type: Resource
+      #     resource:
+      #       name: cpu
+      #       target:
+      #         averageUtilization: 30
+      #         type: Utilization
+      #   behavior:
+      #     scaleUp:
+      #       policies:
+      #       - type: Pods
+      #         value: 1
+      #         periodSeconds: 10
+      #     scaleDown:
+      #       selectPolicy: Disabled
+    # define resources requests and limits for CN pods.
+    resources:
+      requests:
+        cpu: 4
+        memory: 8Gi
+      # If you want to remove one resource limit, e.g., cpu, you can set it to cpu: "unlimited".
+      limits:
+        cpu: 8
+        memory: 8Gi
+    # specify a storageclass name and request size.
+    # Note: Once set, the following fields will not be allowed to be modified.
+    storageSpec:
+      # Specifies the name prefix of the volumes to mount. If left unspecified,
+      # `emptyDir` volumes will be used by default, which are ephemeral, and only for log.
+      # The logs will be lost on pod restart when using emptyDir volumes.
+      #
+      # For persistent storage, specify a volume name prefix.
+      # For example, using `cn` as the name prefix would be appropriate.
+      # Note: If the values of the following mountPaths are not default, you must set the name to cn.
+      name: ""
+      # The storageClassName represent the used storageclass name. If not set will use k8s cluster default storageclass.
+      # You must set a name when you set storageClassName
+      # Note: Because hostPath field is not supported here, hostPath is not allowed to be set in storageClassName.
+      storageClassName: ""
+      # the storage size of per persistent volume for data.
+      storageSize: 1Ti
+      # The number of persistent volumes for data.
+      # If storageCount == 1,
+      #   the storageMountPath field is used to specify the mount path of the persistent volume. If storageMountPath is empty,
+      #   the storageMountPath will be set to /opt/starrocks/cn/storage.
+      #   If storageMountPath is not /opt/starrocks/cn/storage, you must add in config the following configuration: storage_root_path = xxx.
+      # If storageCount > 1,
+      #   the storageMountPath field is used to specify the prefix of the mount path for the persistent volume. For example, if the
+      #   storageMountPath is /opt/starrocks/cn/storage, the real mount path will be /opt/starrocks/cn/storage0, /opt/starrocks/cn/storage1, ...
+      #   You must add in config the following configuration: storage_root_path = /opt/starrocks/cn/storage0;/opt/starrocks/cn/storage1;...
+      storageCount: 1
+      # see the comment of storageCount for the usage of storageMountPath.
+      storageMountPath: ""
+      # If not set will use the value of the storageClassName field.
+      logStorageClassName: ""
+      # The storage size of persistent volume for log, and the mount path is /opt/starrocks/cn/log.
+      # If you set it to 0Gi, the related PVC will not be created, and the log will not be persisted.
+      logStorageSize: 20Gi
+      # If logMountPath is empty, the logMountPath will be set to /opt/starrocks/cn/log.
+      # If logMountPath is not /opt/starrocks/cn/log, you must add in config the following configuration: sys_log_dir = xxx.
+      logMountPath: ""
+      # If not set will use the value of the storageClassName field.
+      spillStorageClassName: ""
+      # Setting this parameter can persist spill storage, and the mount path is /opt/starrocks/cn/spill.
+      # If you set it to 0Gi, the related PVC will not be created, and the spill will not be persisted.
+      # You need to add spill_local_storage_dir=/opt/starrocks/cn/spill in cn.conf.
+      spillStorageSize: 0Gi
+      # If spillMountPath is empty, the spillMountPath will be set to /opt/starrocks/cn/spill.
+      # If spillMountPath is not /opt/starrocks/cn/spill, you must add in config the following configuration: spill_local_storage_dir = xxx.
+      spillMountPath: ""
+    # mount emptyDir volumes if necessary.
+    # Note: please use storageSpec field for persistent storage data and log.
+    emptyDirs: []
+      # e.g., mount an emptyDir volume to /tmp
+      # - name: tmp-data
+      #   mountPath: /tmp
+    # mount hostPath volumes if necessary.
+    # Note:
+    #   1. Please use the storageSpec field for persistent storage data and log.
+    #   2. Please use podAntiAffinity to avoid the pods are scheduled on the same node.
+    #   3. If you use hostPath to mount the volume of cache data, the cache will be lost when the pod is restarted.
+    hostPaths: []
+      # e.g., mount a hostPath volume to /tmp
+      # - name: tmp-data
+      #   hostPath:
+      #     path: /tmp
+      #     type: Directory
+      #   mountPath: /tmp
+    # mount CSI ephemeral inline volumes if necessary.
+    # Unlike storageSpec, no PersistentVolumeClaim is created: the volume is published by the CSI
+    # driver when the pod starts and is torn down with the pod. The driver must already be installed
+    # in the cluster.
+    csiVolumes: []
+      # e.g., mount the SPIFFE workload API socket provided by the SPIFFE CSI driver
+      # - name: spiffe-workload-api
+      #   mountPath: /spiffe-workload-api
+      #   # readOnly here mounts it read-only inside the container; csi.readOnly below asks the
+      #   # driver to publish the volume read-only. Set both for a genuinely read-only mount.
+      #   readOnly: true
+      #   csi:
+      #     driver: csi.spiffe.io
+      #     readOnly: true
+    # persistentVolumeClaimRetentionPolicy specifies the retention policy for PersistentVolumeClaims associated with the component.
+    # The whenDeleted field is supported for all components, and it determines whether to delete PVCs when the StatefulSet is deleted.
+    #	The whenScaled field is only supported for the CN component.
+    persistentVolumeClaimRetentionPolicy:
+      # whenDeleted: Delete
+      # whenScaled: Delete
+    # the config for starting cn, the base information as follows.
+    # From PhoenixAI 3.1, the official documentation uses:
+    #   1. be_port instead of thrift_port, but the thrift_port is still supported.
+    #   2. be_http_port instead of webserver_port, but the webserver_port is still supported.
+    # To avoid the impact of the change on the user's deployment, we still use the old configuration.
+    config: |
+      sys_log_level = INFO
+      # ports for admin, web, heartbeat service
+      thrift_port = 9060
+      webserver_port = 8040
+      heartbeat_service_port = 9050
+      brpc_port = 8060
+    # A map object for setting the config. When configyaml is set to non-empty, the configs in configyaml will take
+    # precedence and values in the config field will be discarded.
+    # Note: When using configyaml, the number needs to be quoted to avoid being converted to scientific notation.
+    #       E.g., brpc_socket_max_unwritten_bytes: "10737418240"
+    configyaml: {}
+    # mount secrets if necessary.
+    # see https://kubernetes.io/docs/concepts/storage/volumes/#using-subpath for more details about subPath.
+    secrets: []
+      # e.g., mount my-secret to /etc/my-secret
+      # - name: my-secret
+      #   mountPath: /etc/my-secret
+      #   subPath: ""
+    # mount configmaps if necessary.
+    # see https://kubernetes.io/docs/concepts/storage/volumes/#using-subpath for more details about subPath.
+    configMaps: []
+      # e.g., mount my-configmap to /etc/my-configmap
+      # - name: my-configmap
+      #   mountPath: /etc/my-configmap
+      #   subPath: ""
+    # terminationGracePeriodSeconds defines duration in seconds the CN pod needs to terminate gracefully.
+    # the default value is 120 seconds
+    terminationGracePeriodSeconds: 120
+    # StartupProbeFailureSeconds defines the total failure seconds of a startup Probe.
+    # the default value is 300 seconds
+    # You can set it to "0" to disable the probe.
+    startupProbeFailureSeconds:
+    # LivenessProbeFailureSeconds defines the total failure seconds of liveness Probe.
+    # the default value is 15 seconds
+    # You can set it to "0" to disable the probe.
+    livenessProbeFailureSeconds:
+    # ReadinessProbeFailureSeconds defines the total failure seconds of a readiness Probe.
+    # the default value is 15 seconds
+    # You can set it to "0" to disable the probe.
+    readinessProbeFailureSeconds:
+    # minReadySeconds specifies the minimum number of seconds for which a newly created pod should be ready
+    # without any of its container crashing, for it to be considered available.
+    # Defaults to 0 (pod will be considered available as soon as it is ready).
+    # see https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#minimum-ready-seconds for more details.
+    # Note: This field takes effect only when podManagementPolicy is set to OrderedReady.
+    minReadySeconds: 0
+    # podManagementPolicy controls how pods are created during initial scale up, when replacing pods on nodes, or when scaling down.
+    # The default policy is Parallel, which is not the same as statefulset's default policy. CN is stateless compute-only,
+    # so scaling out/in pods in parallel is safe and faster; FE defaults to OrderedReady instead because it must be
+    # scaled up/down one by one.
+    # Note: If you have changed this field, then the related statefulset object need to be recreated, or there will be an error like this:
+    #       updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy',
+    #       'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden
+    podManagementPolicy: Parallel
+    # Lifecycle describes actions that the management system should take in response to container lifecycle events.
+    # By default, Operator will add corresponding preStop hooks for different components. For example, the preStop
+    # script for the FE Component is /opt/starrocks/fe_prestop.sh,
+    # and for the CN Component is /opt/starrocks/cn_prestop.sh.
+    # You can set postStart hook.
+    lifecycle: {}
+      # postStart:
+      #   exec:
+      #     command:
+      #     - /bin/sh
+      #     - -c
+      #     - echo "Hello, world!"
+    # Sidecars is an optional list of containers that are run in the same pod as the phoenixai component.
+    # You can use this field to launch helper containers that provide additional functionality to the main container.
+    # See https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#Container for how to configure a container.
+    sidecars: []
+      # - name: sidecar-container
+      #   image: busybox
+      #   # If phoenixAICnSpec.storageSpec.name is cn, you can mount the volume of cache data like this.
+      #   # If phoenixAICnSpec.storageSpec.name is not set, no default volume will be created, so you cannot mount the volume of cache data like this.
+      #   command: ['sh', '-c', 'echo "hello from the sidecar container" >/opt/starrocks/cn/storage/sidecar-data.txt && sleep 3600']
+      #   volumeMounts:
+      #   - mountPath: /opt/starrocks/cn/storage
+      #     name: cn-data # append '-data' to the end of the name of the phoenixAICnSpec.storageSpec.name
+    # sidecarsMap is an optional map of containers that are run in the same pod as the phoenixai component.
+    # The reason for using sidecarsMap please refer to https://github.com/StarRocks/starrocks-kubernetes-operator/issues/618
+    # sidecarsMap has higher priority than sidecars, and the key of sidecarsMap is the name of the sidecar container.
+    sidecarsMap: {}
+      # sidecar-container:
+      #   image: busybox
+      #   # If phoenixAICnSpec.storageSpec.name is cn, you can mount the volume of cache data like this.
+      #   # If phoenixAICnSpec.storageSpec.name is not set, no default volume will be created, so you cannot mount the volume of cache data like this.
+      #   command: ['sh', '-c', 'echo "hello from the sidecar container" >/opt/starrocks/cn/storage/sidecar-data.txt && sleep 3600']
+      #   volumeMounts:
+      #   - mountPath: /opt/starrocks/cn/storage
+      #     name: cn-data # append '-data' to the end of the name of the phoenixAICnSpec.storageSpec.name
+    # initContainers is an optional list of containers that are run in the same pod as the phoenixai component.
+    # You can use this to launch helper containers that run before the main container starts.
+    # See https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#Container for how to configure a container.
+    initContainers: []
+      # - name: init-container
+      #   image: busybox
+      #   # If phoenixAICnSpec.storageSpec.name is cn, you can mount the volume of cache data like this.
+      #   # If phoenixAICnSpec.storageSpec.name is not set, no default volume will be created, so you cannot mount the volume of cache data like this.
+      #   command: ['sh', '-c', 'echo "hello from the init container" >/opt/starrocks/cn/storage/init-data.txt']
+      #   volumeMounts:
+      #   - mountPath: /opt/starrocks/cn/storage
+      #     name: cn-data # append '-data' to the end of the phoenixAICnSpec.storageSpec.name
+    # Max unavailable pods for the CN component when doing rolling update.
+    # This field cannot be 0. The default setting is 1.
+    # Note: Because Operator uses statefulset to manage this component, the maxUnavailable field is in Alpha stage, and it is honored
+    # only by API servers that are running with the MaxUnavailableStatefulSet feature gate enabled.
+    # See https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#maximum-unavailable-pods for more details.
+    maxUnavailablePods:
+    # Share a single process namespace between all of the containers in a pod.
+    # When this is set, containers will be able to view and signal processes from other containers
+    # in the same pod, and the first process in each container will not be assigned PID 1.
+    shareProcessNamespace:
+  
+  # =============================================================================
+  # Extra resources (Secrets / ConfigMaps / arbitrary objects)
+  # =============================================================================
+  
+  # create secrets if necessary.
+  secrets: []
+    # e.g., create my-secret
+    # - name: my-secret
+    #   data:
+    #     key: |
+    #       this is the content of the secret
+    #       when mounted, the key will be the name of the file
+  
+  # create configmaps if necessary.
+  configMaps: []
+    # e.g., create my-configmap
+    # - name: my-configmap
+    #   data:
+    #     key: |
+    #       this is the content of the configmap
+    #       when mounted, the key will be the name of the file
+  
+  # If you need to deploy other resources, e.g., serviceAccount, you can add them here.
+  # You can even deploy resources to different namespaces
+  resources: []
+    # - apiVersion: v1
+    #   kind: ServiceAccount
+    #   metadata:
+    #     name: sa-for-phoenixai
+    #     namespace: phoenixai
+  
+  # =============================================================================
+  # FE proxy component
+  # =============================================================================
+  
+  # specify the FE proxy deployment or not.
+  phoenixAIFeProxySpec:
+    # specify the FE proxy deployment or not.
+    enabled: false
+    replicas: 1
+    imagePullPolicy: IfNotPresent
+    # default nginx:1.24.0
+    image:
+      repository: ""
+      tag: ""
+    resources:
+      requests:
+        cpu: 1
+        memory: 2Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+    # set the resolver for nginx server, default kube-dns.kube-system.svc.cluster.local
+    resolver: ""
+    service:
+      # the FE proxy service type, only supported ClusterIP, NodePort, LoadBalancer
+      # default ClusterIP
+      type: ClusterIP
+      # The static IP for the service when type is LoadBalancer and this field is not empty.
+      # Note: the field name is loadbalancerIP (historical spelling), not loadBalancerIP.
+      loadbalancerIP: ""
+      # add annotations for external FE proxy service.
+      annotations: {}
+      # Add labels for external FE proxy service. The operator may add its own default labels.
+      labels: {}
+      # Config the service port for FE proxy service.
+      # To assign a specific port or nodePort to a service, you should specify them by the corresponding name or
+      # containerPort in the service configuration. If both containerPort and name are specified, containerPort takes precedence.
+      # For FE proxy, the port name can be http-port, and its default container port is 8080.
+      ports: []
+        # e.g., specify a dedicated node port for FE proxy service by containerPort.
+        # - nodePort: 30080 # The range of valid ports is 30000-32767
+        #   containerPort: 8080 # The port on the container to expose.
+      # Specify the source IP ranges for the load balancer when the type=LoadBalancer.
+      loadBalancerSourceRanges: []
+        # - 10.0.0.0/8
+      # Specify how nodes distribute service traffic. Possible values: Cluster, Local.
+      # Only applies when the type is NodePort or LoadBalancer. Local preserves the client source IP.
+      externalTrafficPolicy: ""
+    # imagePullSecrets allows you to use secrets for pulling images for your pods.
+    imagePullSecrets: []
+    # - name: "image-pull-secret"
+    # If specified, the pod's nodeSelector — a map of nodeSelectors to match when scheduling pods on nodes.
+    # Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
+    nodeSelector: {}
+      # kubernetes.io/arch: amd64
+      # kubernetes.io/os: linux
+    # affinity for FE proxy pod scheduling.
+    affinity: {}
+      # The podAntiAffinity example below makes FE proxy pods
+      # prefer to run on different nodes (best-effort, so pods are still schedulable when there
+      # are fewer nodes than replicas). To strictly forbid co-location, use
+      # requiredDuringSchedulingIgnoredDuringExecution instead — but note pods stay Pending when
+      # it cannot be satisfied.
+      # podAntiAffinity:
+      #   preferredDuringSchedulingIgnoredDuringExecution:
+      #   - weight: 100
+      #     podAffinityTerm:
+      #       labelSelector:
+      #         matchLabels:
+      #           app.kubernetes.io/component: fe-proxy
+      #       topologyKey: kubernetes.io/hostname
+      # The nodeAffinity example below pins FE proxy pods to a specific node: replace
+      # target-host-name with a real node name (see `kubectl get nodes`) before use.
+      # nodeAffinity:
+      #   requiredDuringSchedulingIgnoredDuringExecution:
+      #     nodeSelectorTerms:
+      #     - matchFields:
+      #       - key: metadata.name
+      #         operator: In
+      #         values:
+      #         - target-host-name
+    # Node tolerations for FE proxy pod scheduling to nodes with taints
+    # Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+    tolerations: []
+      # e.g., tolerate the taint created by:
+      #   kubectl taint nodes <node> dedicated=phoenixai:NoSchedule
+      # - key: "dedicated"
+      #   operator: "Equal"
+      #   value: "phoenixai"
+      #   effect: "NoSchedule"
+    # LivenessProbeFailureSeconds defines the total failure seconds of liveness Probe.
+    # the default value is 15 seconds
+    # You can set it to "0" to disable the probe.
+    livenessProbeFailureSeconds:
+    # ReadinessProbeFailureSeconds defines the total failure seconds of a readiness Probe.
+    # the default value is 15 seconds
+    # You can set it to "0" to disable the probe.
+    readinessProbeFailureSeconds:
+    # Note: will create emptyDir volume for FE proxy, PVC is not supported.
+    emptyDirs: []
+        # e.g., mount an emptyDir volume to /tmp
+        # - name: tmp-data
+        #   mountPath: /tmp
+    # the pod labels for user select or classify pods.
+    podLabels: {}
+
+anywhere:
+  # Default values for the anywhere subchart (the PhoenixAI Anywhere console).
+  #
+  # The sections every production install configures come first: image, the operator pairing
+  # (operatorApiAddrs), the external dependencies (object storage is REQUIRED, Prometheus powers the
+  # monitoring pages) and query-history collection. Everything after them has workable defaults.
+  
+  # Whether the parent kube-anywhere chart installs the console (dependency
+  # condition). Off by default because the console requires object storage
+  # (dependencies.s3) that has no usable default. Inert when this chart is
+  # templated or installed standalone.
+  enabled: false
+  
+  # A minimal production-shaped example — what a typical install actually puts in its own
+  # my-values.yaml. Prefix every key with `anywhere.` when installing through the parent
+  # kube-anywhere chart (`anywhere.enabled`, `anywhere.dependencies.s3.bucket`, ...); replace the
+  # <...> placeholders with your object-storage credentials — never commit real ones:
+  #
+  #   enabled: true
+  #   image:
+  #     repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/anywhere
+  #     tag: ""            # empty = the chart appVersion; set it to pin a specific console version
+  #     pullPolicy: IfNotPresent
+  #   operatorApiAddrs:
+  #     - kube-anywhere-api:9090
+  #   queryHistory:
+  #     enabled: true
+  #   dependencies:
+  #     s3:
+  #       bucket: <bucket>
+  #       path: <key-prefix>
+  #       region: <region>
+  #       endpoint: https://s3.<region>.amazonaws.com
+  #       accessKey: <access-key>
+  #       secretKey: <secret-key>
+  #       usePathStyle: false
+  #     prometheus:
+  #       enabled: true
+  #       endpoint: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+  
+  # ---------------------------------------------------------------------------------------------
+  # Image
+  # ---------------------------------------------------------------------------------------------
+  image:
+    repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/anywhere
+    # Empty defaults to the chart appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  # Secrets for pulling the image from a private registry.
+  imagePullSecrets: []
+  # - name: "image-pull-secret"
+  
+  # ---------------------------------------------------------------------------------------------
+  # Operator pairing — which PhoenixAI clusters this anywhere serves
+  # ---------------------------------------------------------------------------------------------
+  # Addresses of ALL operator gRPC API Services this anywhere serves. The operator chart renders
+  # that Service (named <its nameOverride>-api) when phoenixAIOperator.enableApiServer is true —
+  # both default on, so the default entry below matches a default kube-anywhere install and needs
+  # no change. Override it when the operator chart's nameOverride is overridden, or when serving
+  # operators in other namespaces:
+  #   operatorApiAddrs:
+  #     - "kube-anywhere-api.ns-a:9090"
+  #     - "kube-anywhere-api.ns-b:9090"
+  # Order matters: it arbitrates ownership conflicts.
+  operatorApiAddrs:
+    - "kube-anywhere-api:9090"
+  # The namespaces the PhoenixAI clusters live in. Non-empty scopes RBAC down to exactly these
+  # namespaces (one Role/RoleBinding each); empty (the default) serves all namespaces and renders
+  # a ClusterRole/ClusterRoleBinding, pairing a global-mode operator.
+  watchNamespaces: []
+  
+  # ---------------------------------------------------------------------------------------------
+  # External dependencies
+  # ---------------------------------------------------------------------------------------------
+  # The user pre-creates these services and injects endpoints + credentials here. No relational
+  # database here on purpose — that is embedded (see persistence below). Configured blocks are
+  # inlined into the config-file Secret (templates/secret-config.yaml, the reason the config is
+  # a Secret and not a ConfigMap) for the backend to consume; changes roll the pod via the config
+  # checksum annotation. At startup anywhere validates dependencies.s3 with a write/read/delete
+  # probe before serving; an enabled dependencies.prometheus is validated via the dependency-check
+  # endpoint. Both report actionable errors.
+  dependencies:
+    # Object storage for large artifacts — query profiles (tens of KB to tens of MB) and support
+    # bundles (up to 100 GiB scale): too large for a relational database, and the data PVC does not
+    # scale to them. REQUIRED: the chart refuses to render until bucket/region/credentials are
+    # set below. AWS-S3-compatible endpoints are supported. All artifacts share one key tree, one
+    # top-level prefix per feature ("profile/", "support-bundle/"), optionally under the "path"
+    # prefix below, so the bucket can be shared with other uses (e.g. the PhoenixAI cluster's own
+    # data bucket; bucket+path together match StarRocks' aws_s3_path semantics). Anywhere deletes
+    # expired objects itself (query-history retention default 7 days; support bundles by TTL);
+    # bucket lifecycle rules on the two prefixes (expiration = retention + 7 days) plus an
+    # abort-incomplete-multipart-upload rule are recommended as backstops for objects orphaned
+    # while anywhere is down.
+    s3:
+      bucket: ""
+      path: ""
+      region: ""
+      endpoint: ""
+      accessKey: ""
+      secretKey: ""
+      # Path-style addressing (https://endpoint/bucket/key). Required by MinIO and most self-hosted
+      # S3-compatibles; leave false for AWS S3 and Alibaba OSS (virtual-hosted style).
+      usePathStyle: false
+    # Time-series metrics for the System Monitoring pages. Anywhere only queries; it never runs its
+    # own TSDB. Validate the wiring after install with the dependency check:
+    # POST /api/v1/admin/dependencies/prometheus/check. The same checks also run per cluster as the
+    # prometheus-dependency-unusable health-check rule (warning), so a missing or misconfigured
+    # dependency surfaces without anyone opening that page; disable the rule via
+    # inspection.disabledRules if this installation deliberately runs without Prometheus.
+    # Optional extra: when this Prometheus also scrapes kubelet/cAdvisor and kube-state-metrics
+    # (kube-prometheus-stack does both by default), the resource topology and Instance State pages
+    # additionally show pod-level CPU/memory usage and utilization. Nothing to configure here — the
+    # backend probes for those metrics and degrades the affected charts when they are absent; the
+    # dependency check reports the two probes as advisory container-metrics / resource-metrics items.
+    prometheus:
+      enabled: false
+      # Full base URL — scheme required, path prefix kept (works behind reverse
+      # proxies and for Prometheus-compatible backends):
+      #   http://prometheus-k8s.monitoring.svc:9090
+      #   https://mimir.example.com/prometheus
+      endpoint: ""
+      # Authentication — configure at most one mode:
+      # username+password for HTTP basic auth, bearerToken for Authorization: Bearer
+      # (e.g. OpenShift monitoring, managed services).
+      username: ""
+      password: ""
+      bearerToken: ""
+      # Extra headers attached to every query, e.g. the multi-tenant org header
+      # of Cortex/Mimir/Thanos:
+      #   X-Scope-OrgID: tenant-1
+      headers: {}
+      tls:
+        # PEM content of a self-signed CA to trust for https endpoints.
+        caCert: ""
+        # Skip certificate verification (not recommended; the dependency check
+        # flags it).
+        insecureSkipVerify: false
+      # Rename adaptation: if your pipeline renames PhoenixAI Database's starrocks_*
+      # metrics (metric_relabel_configs, collection agents), set the deployed
+      # prefix here; the check's metric-rename finding suggests the value.
+      # Empty means the canonical starrocks_.
+      metricPrefix: ""
+      # The cluster-locating label on the metrics. Empty means cluster — what
+      # the kube-phoenixai chart's ServiceMonitor injects
+      # (metrics.serviceMonitor.enabled=true).
+      clusterLabel: ""
+  
+  # ---------------------------------------------------------------------------------------------
+  # Query-history collection
+  # ---------------------------------------------------------------------------------------------
+  # Query-history collection (the Query insights history page): anywhere polls every FE's
+  # in-memory query_detail queue and persists what passes the bar below.
+  queryHistory:
+    # Off by default, matching PhoenixAI Database: the FE config enable_collect_query_detail_info
+    # also defaults to false, so a collector that polls by default would only generate useless
+    # background load. Enable BOTH to use the history page (the configuration inspection rule
+    # query-detail-collect-inconsistent flags a mismatch). When off, anywhere sends no
+    # background requests to any cluster.
+    #
+    # Sizing per persisted query: ~1KB in the embedded database (data PVC: fixed columns plus
+    # the first 1KB of the SQL), plus the large texts in the object store — the full SQL (its
+    # actual statement length), the execution plan (typically 1-10KB) and the query profile
+    # (tens of KB up to MBs; only present for queries above PhoenixAI Database's
+    # big_query_profile_threshold). With the default bar below only slow and failed queries are
+    # persisted, so daily volume is roughly (slow + failed queries per day) x those sizes.
+    # Independent of retention, anywhere trims the oldest records when the data PVC passes 85%
+    # usage, down to 70%.
+    enabled: false
+    # Sampling period. The FE keeps query details in memory for only ~30s, so raising this
+    # towards 30s risks losing queries; lowering it adds polling load.
+    collectInterval: 10s
+    # Days to keep collected query records and their profile objects.
+    retentionDays: 7
+    # Persist bar in milliseconds: only queries at least this slow are kept (failed queries are
+    # always kept). 0 keeps every query — suitable only for low-traffic clusters: at high QPS
+    # full persistence grows the database and object store without bound.
+    slowQueryMs: 5000
+  
+  # ---------------------------------------------------------------------------------------------
+  # Admin Console accounts
+  # ---------------------------------------------------------------------------------------------
+  # The accounts live in one Kubernetes Secret (key = username, value = password) mounted into
+  # the pod; the backend reads it on every login, so rotating or adding accounts via
+  # `kubectl edit secret` takes effect within about a minute — no restart. Three sources, by
+  # precedence:
+  #   1. existingSecret — name of a Secret you manage yourself (same key = username convention);
+  #   2. users          — accounts rendered from values (deterministic: REQUIRED for GitOps/ArgoCD
+  #                       installs; note the passwords then live in your values/Git);
+  admin:
+    users:
+      admin: "admin"
+    existingSecret: ""
+  
+  # ---------------------------------------------------------------------------------------------
+  # Application settings
+  # ---------------------------------------------------------------------------------------------
+  # HTTP port the container listens on and the Service exposes (REST API + embedded web UI).
+  httpPort: 8090
+  # Log level: debug/info/warn/error.
+  #
+  # Logs are written to the container's standard output as one JSON object per line
+  # (`kubectl logs`), so any log collector can parse them without a custom pattern. Every line
+  # carries the source location that produced it (`caller`), and every line produced while
+  # serving one HTTP request carries the same `req` value — the request id, which is also
+  # returned to the caller in the X-Request-Id response header. When reporting a problem,
+  # quoting that id lets the whole request be found in the log.
+  #
+  # At `info` you get one line per API request plus every failure that is a server-side or
+  # upstream problem. `debug` additionally logs the web UI's static-asset requests and the
+  # client-side errors (bad parameters, not-found, expired sessions) — useful when reproducing
+  # one specific request, noisy as a steady state.
+  logLevel: info
+  # Sets the TZ environment variable of the anywhere pod, which is the zone its log timestamps are
+  # rendered in. Does not affect the PhoenixAI cluster's own time_zone.
+  timeZone: UTC
+  # Support-bundle sizing and retention. Bundle archives stream straight into the object store
+  # configured under dependencies.s3, enabling the presigned-URL export endpoint. There is no
+  # staging directory and no local copy of the archive.
+  supportBundle:
+    # Days to keep finished bundles — time is the only retention dimension (0 disables cleanup:
+    # an explicit keep-forever). The cleanup runs in anywhere itself.
+    retentionDays: 7
+    # Per-stream rate limit (MB/s, 10^6 bytes), measured at the receiving end, on
+    # every exec/pods-log byte stream a bundle collects. Collection is strictly
+    # serial, so this is the global ceiling on the kube-apiserver proxy bandwidth
+    # the feature can consume. Via stream back-pressure it also caps the in-pod
+    # IO/CPU of an output-bound whole-file cat; a sparse-match awk scan
+    # (log-search / audit-analysis) emits too little to back-pressure and reads at
+    # pod disk speed regardless. 0 disables the limit explicitly.
+    streamRateLimitMBps: 8
+  # PhoenixAI Database license handling (the License page, the license block on the cluster
+  # list, and the license-invalid inspection rule).
+  license:
+    # How far ahead of a license's expiry anywhere starts warning: the license-invalid
+    # inspection rule fails and the cluster list/overview flag expiringSoon once the remaining
+    # validity drops to this window. A fixed Go duration (720h = 30 days), not a calendar month.
+    expiryWarnWindow: 720h
+    # How long a cluster's registered-license list is served from anywhere's in-memory cache
+    # before the cluster's FE is asked again — the License page and the cluster list poll the
+    # same data, and the cache absorbs that polling into one FE HTTP call per cluster per TTL.
+    # "0s" disables the cache (every read hits the FE).
+    cacheTTL: 5m
+  # CR configuration inspection (GET .../inspections) — selects which rules run.
+  # All rules run by default: leave both lists empty for the recommended zero-config behavior.
+  # When either list is non-empty the chart inlines the selection into the config file
+  # (templates/secret-config.yaml); changing it rolls the pod via the config checksum annotation.
+  # Available rules (id / severity — what it checks):
+  #   fe-meta-not-persisted                 critical  FE meta_dir not covered by a PVC-backed volume
+  #   fe-log-not-persisted                  warning   FE log dir not covered by a PVC-backed volume
+  #   cn-log-not-persisted                  warning   CN log dir not covered by a PVC-backed volume
+  #   cn-data-not-persisted                 warning   CN storage_root_path not covered by a PVC-backed volume, so the
+  #                                                   local data cache is lost on every Pod restart (cold queries)
+  #   fe-single-replica                     warning   FE runs a single replica (no metadata HA)
+  #   fe-replicas-even                      warning   FE replica count is even (BDBJE majority protocol)
+  #   mysql-pwd-env-missing                 warning   MYSQL_PWD set on some components, missing on others
+  #   cluster-sql-unreachable               critical  anywhere cannot query the cluster's FE (rejected password, or FE unreachable)
+  #   mount-path-conflict                   warning   multiple full-directory mounts at the same path
+  #   hpa-replicas-conflict                 warning   CN replicas outside the HPA min/max range
+  #   pod-label-overrides-builtin           warning   podLabels override operator built-in label keys
+  #   image-version-skew                    warning   FE/BE/CN image tags differ
+  #   requests-not-set                      warning   CPU/memory requests missing on a component
+  #   tz-env-inconsistent                   info      TZ env differs across components
+  #   fe-startup-probe-not-tuned            info      default startup probe window with persisted metadata
+  #   termination-grace-period-short        info      BE/CN keep the default 120s grace period
+  #   topology-spread-missing               info      multi-replica components not spread across domains
+  #   serial-pod-management                 info      podManagementPolicy explicitly OrderedReady
+  #   query-detail-collect-inconsistent     info      fe.conf query-detail flag vs queryHistory.enabled mismatch
+  #   license-invalid                       critical  no valid PhoenixAI Database license is registered on the cluster, or the
+  #                                                   longest-valid one expires within license.expiryWarnWindow
+  #   prometheus-dependency-unusable        warning   no Prometheus dependency configured, or anywhere cannot read this
+  #                                                   cluster's metrics through it (same checks as the Dependencies page)
+  inspection:
+    # Non-empty = allowlist: only these rule ids run.
+    enabledRules: []
+    # These rule ids never run (applied after enabledRules).
+    disabledRules: []
+  
+  # ---------------------------------------------------------------------------------------------
+  # Persistent storage for the embedded relational database
+  # ---------------------------------------------------------------------------------------------
+  # SQLite via the embedded storage abstraction: the usage-metering ledger and future console
+  # state. Rendered as a standalone PVC (templates/pvc.yaml) rather than a StatefulSet
+  # volumeClaimTemplate — that field is immutable
+  # and froze size at install time. The PVC carries helm.sh/resource-policy: keep, so it is not
+  # deleted by helm uninstall (usage records are the customer's bill — remove them deliberately).
+  persistence:
+    # Growing size flows through helm upgrade: the volume expands in place when the StorageClass
+    # has allowVolumeExpansion; shrinking is rejected by Kubernetes.
+    size: 10Gi
+    # Empty uses the cluster's default StorageClass.
+    storageClass: ""
+    # Name of a pre-created PVC to use instead of the chart-rendered one (size and storageClass
+    # above are then ignored). Must be ReadWriteOnce-mountable in the release namespace.
+    existingClaim: ""
+  
+  # ---------------------------------------------------------------------------------------------
+  # Workload tuning
+  # ---------------------------------------------------------------------------------------------
+  # Replicas are fixed at 1 in the StatefulSet and deliberately not configurable: anywhere embeds
+  # its relational storage (SQLite on the PVC, see persistence above) which allows one writer,
+  # and the binary refuses to start on a non-0 ordinal. Running more than one replica is not
+  # supported.
+  resources:
+    limits:
+      cpu: 1
+      memory: 2Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
+  # Container security context. The image is distroless static (nonroot); the binary writes only
+  # to the data PVC mount (persistent storage), never to the container root filesystem.
+  securityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+  # Extra annotations for the anywhere pod.
+  podAnnotations: {}
+  # Standard scheduling knobs for the anywhere pod.
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  # Additional anywhere container environment variables (e.g. GODEBUG). Anywhere's own
+  # configuration is NOT env-settable: it goes through the rendered config-file Secret
+  # (templates/secret-config.yaml). Cluster FE endpoints and root credentials are always resolved
+  # per cluster from the operator API and the cluster's Secret. You specify this manually like you
+  # would a raw pod manifest.
+  env: []
+  
+  # ---------------------------------------------------------------------------------------------
+  # Identity and naming
+  # ---------------------------------------------------------------------------------------------
+  # The ServiceAccount the pod runs as. It is always created, together with the (Cluster)Role and
+  # (Cluster)RoleBinding granting anywhere its minimal RBAC (secrets get, pods/exec create,
+  # events get/list, pods/log get — scoped by watchNamespaces above): anywhere cannot serve
+  # clusters without them, so there is no toggle to render a broken install.
+  serviceAccount:
+    # Empty defaults to the chart name (anywhere), matching every other rendered resource.
+    name: ""
+    # Optional annotations to add to the serviceaccount manifest (e.g. IAM role bindings).
+    annotations: {}
+    # Optional labels to add to the serviceaccount manifest.
+    labels: {}

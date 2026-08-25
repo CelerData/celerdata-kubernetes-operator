@@ -1,0 +1,71 @@
+{{- if and .Values.initPassword.enabled .Values.initPassword.isInstall .Release.IsInstall }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "phoenixaicluster.name" . }}-initpwd
+  namespace: {{ template "phoenixaicluster.namespace" . }}
+  labels:
+    cluster: {{ template "phoenixaicluster.name" . }}
+  {{- if .Values.initPassword.annotations }}
+  annotations:
+    {{- toYaml .Values.initPassword.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  template:
+    {{- if .Values.initPassword.podAnnotations }}
+    metadata:
+      annotations:
+        {{- toYaml .Values.initPassword.podAnnotations | nindent 8 }}
+    {{- end }}
+    spec:
+      {{- if or .Values.phoenixAIFeSpec.imagePullSecrets .Values.phoenixAICluster.componentValues.imagePullSecrets }}
+      imagePullSecrets:
+        {{- include "phoenixaicluster.fe.imagePullSecrets" . | nindent 6 }}
+      {{- end }}
+      {{- if or .Values.phoenixAIFeSpec.affinity .Values.phoenixAICluster.componentValues.affinity }}
+      affinity:
+        {{- include "phoenixaicluster.fe.affinity" . | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.phoenixAIFeSpec.tolerations .Values.phoenixAICluster.componentValues.tolerations }}
+      tolerations:
+        {{- include "phoenixaicluster.fe.tolerations" . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ template "phoenixaicluster.name" . }}-initpwd
+        {{- if .Values.initPassword.image }}
+        image: {{ .Values.initPassword.image }}
+        {{- else }}
+        image: {{ .Values.phoenixAIFeSpec.image.repository }}:{{ include "phoenixaicluster.fe.image.tag" . }}
+        {{- end }}
+        imagePullPolicy: IfNotPresent
+        {{- if .Values.initPassword.resources }}
+        resources: {{- toYaml .Values.initPassword.resources | nindent 10 }}
+        {{- end }}
+        command:
+        - /bin/bash
+        args:
+        - /opt/starrocks/fe_initpwd.sh
+        - {{ template "phoenixaicluster.name" . }}-fe-0.{{ template "phoenixaicluster.name" . }}-fe-search
+        - "{{- default 9030 (include "phoenixaicluster.fe.query.port" .) }}"
+        env:
+        - name: INIT_PWD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: {{ template "phoenixaicluster.initpassword.secret.name" . }}
+        volumeMounts:
+        - mountPath: /opt/starrocks/fe_initpwd.sh
+          name: {{ template "phoenixaicluster.name" . }}-initpwd-shell
+          subPath: fe_initpwd.sh
+      volumes:
+      - configMap:
+          defaultMode: 420
+          items:
+            - key: fe_initpwd.sh
+              path: fe_initpwd.sh
+          name: {{ template "phoenixaicluster.name" . }}-initpwd-shell
+          optional: false
+        name: {{ template "phoenixaicluster.name" . }}-initpwd-shell
+      restartPolicy: OnFailure
+  backoffLimit: 10
+{{- end }}
