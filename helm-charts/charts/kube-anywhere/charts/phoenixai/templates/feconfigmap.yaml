@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "phoenixaicluster.fe.configmap.name" . }}
+  namespace: {{ template "phoenixaicluster.namespace" . }}
+  labels:
+    cluster: {{ template "phoenixaicluster.name" . }}
+    app: "fe"
+data:
+  {{- include "phoenixaicluster.fe.config" . | nindent 2 }}

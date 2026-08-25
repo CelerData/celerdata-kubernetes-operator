@@ -1,7 +1,7 @@
 # ComputeNode
 
-ComputeNode(cn) is a compute node in celerdata, without local storage data, can execute queries except OlapScanNode and OlapTableSink. 
-celerdata-operator is a cloud native technology, implement the control of ComputeNode. 
+ComputeNode(cn) is a compute node in phoenixai, without local storage data, can execute queries except OlapScanNode and OlapTableSink. 
+phoenixai-operator is a cloud native technology, implement the control of ComputeNode. 
 
 ## Kubernetes Resources 
 

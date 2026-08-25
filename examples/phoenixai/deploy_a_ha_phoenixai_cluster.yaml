@@ -1,0 +1,29 @@
+# This manifest deploys a high-available PhoenixAI cluster with 3 FE pods and 3 CN pods.
+# A high-available PhoenixAI cluster requires at least THREE FE pods in the PhoenixAI cluster. One of them is the
+# leader, and the other two are the followers.
+# PhoenixAI cluster.
+# The requests and limits of FE and CN are set based on https://docs.starrocks.io/docs/deployment/plan_cluster/
+
+apiVersion: phoenixdata.ai/v1
+kind: PhoenixAICluster
+metadata:
+  name: a-ha-phoenixai   # change the name if needed.
+spec:
+  phoenixAIFeSpec:
+    image: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/fe-ubuntu:4.1-latest
+    replicas: 3   # at least 3 FE pods
+    limits:
+      cpu: 8
+      memory: 16Gi
+    requests:
+      cpu: 8
+      memory: 16Gi
+  phoenixAICnSpec:
+    image: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu:4.1-latest
+    replicas: 3 # at least 3 CN pods
+    limits:
+      cpu: 16
+      memory: 64Gi
+    requests:
+      cpu: 16
+      memory: 64Gi

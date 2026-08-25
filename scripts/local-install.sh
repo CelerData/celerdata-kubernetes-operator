@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# This script is used to install celerdata on local k8s cluster.
-# Make sure `docker` is installed，See [install docker](https://github.com/celerdata/phoenixai-kubernetes-operator/blob/main/doc/cn/local_installation_how_to.md) for more details.
+# This script is used to install phoenixai on local k8s cluster.
+# Make sure `docker` is installed, see [install docker](https://docs.docker.com/get-docker/) for more details.
 #
 # It will do the following things:
 #   1. install kubectl, helm, kind on your machine.
-#   2. create a kind cluster named `celerdata`.
-#   3. install [kube-celerdata](https://github.com/celerdata/phoenixai-kubernetes-operator/tree/main/helm-charts/charts/kube-celerdata) helm chart.
+#   2. create a kind cluster named `phoenixai`.
+#   3. install [kube-anywhere](https://github.com/CelerData/phoenixai-kubernetes-operator/tree/main/helm-charts/charts/kube-anywhere) helm chart.
 
 # specify the k8s version installed by kind
 K8S_VERSION="v1.23.4"
@@ -15,14 +15,12 @@ K8S_VERSION="v1.23.4"
 HELM_URL="https://get.helm.sh"
 KIND_URL="https://kind.sigs.k8s.io/dl/v0.20.0"
 KUBECTL_URL="https://dl.k8s.io/release/v1.28.3/bin"
-HELM_CHART_URL="https://github.com/celerdata/phoenixai-kubernetes-operator/releases/download/v1.11.7/kube-celerdata-1.11.7.tgz"
+HELM_CHART_URL="https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/kube-anywhere-2.0.0.tgz"
 # NOTE:
-# if you can not access the following url, you can try to use the following url.
-# And you can specify the url by command arguments.
-# HELM_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com"
-# KIND_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com"
-# KUBECTL_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com"
-# HELM_CHART_URL="https://ydx-starrocks-public.oss-cn-hangzhou.aliyuncs.com/kube-celerdata-1.11.7.tgz"
+# If your network cannot reach these official download sites, point each one at a
+# mirror of your own with --helm-url, --kind-url, --kubectl-url and
+# --helm-chart-url (see --help). A mirror must keep the same path layout as the
+# site it replaces, because the script appends the per-OS/arch path itself.
 
 # checkBinary checks if the binary is installed. If not, return 1, else return 0
 function checkBinary() {
@@ -159,20 +157,20 @@ nodes:
     hostPort: 30002
     protocol: TCP" >/tmp/kind.yaml
 
-  kind create cluster --image=kindest/node:$K8S_VERSION --name=celerdata --config=/tmp/kind.yaml || exit 1
+  kind create cluster --image=kindest/node:$K8S_VERSION --name=phoenixai --config=/tmp/kind.yaml || exit 1
 }
 
-# install installs kube-celerdata helm chart
+# install installs kube-anywhere helm chart
 function install() {
-  echo "Installing kube-celerdata helm chart"
-  helm repo add celerdata https://celerdata.github.io/phoenixai-kubernetes-operator
-  helm repo update celerdata
+  echo "Installing kube-anywhere helm chart"
+  helm repo add phoenixai https://celerdata.github.io/phoenixai-kubernetes-operator
+  helm repo update phoenixai
 
   # Operator and FE/BE images are NOT overridden here on purpose: the chart's
   # own defaults already point at the recommended versions for this release.
   cat <<EOF >/tmp/local-install-values.yaml
-celerdata:
-  celerDataFeSpec:
+phoenixai:
+  phoenixAIFeSpec:
     resources:
       limits:
         cpu: 2
@@ -187,7 +185,7 @@ celerdata:
         name: query
         nodePort: 30002
         port: 9030
-  celerDataBeSpec:
+  phoenixAICnSpec:
     resources:
       limits:
         cpu: 2
@@ -195,7 +193,7 @@ celerdata:
       requests:
         cpu: 100m
         memory: 200Mi
-  celerDataFeProxySpec:
+  phoenixAIFeProxySpec:
     enabled: true
     resources:
       requests:
@@ -210,7 +208,7 @@ celerdata:
         port: 8080
 EOF
 
-  cmd="helm install -n celerdata celerdata $HELM_CHART_URL --create-namespace --timeout 60s"
+  cmd="helm install -n phoenixai phoenixai $HELM_CHART_URL --create-namespace --timeout 60s"
   eval "$cmd -f /tmp/local-install-values.yaml" 1>/dev/null
 }
 
@@ -251,8 +249,8 @@ function parseInput() {
   done
 
   checkPrerequisites
-  (sudo kind get clusters | grep celerdata) || kindCreateCluster
-  install && echo 'CelerData is installed successfully!' || echo 'CelerData is installed failed!'
+  (sudo kind get clusters | grep phoenixai) || kindCreateCluster
+  install && echo 'PhoenixAI is installed successfully!' || echo 'PhoenixAI is installed failed!'
 }
 
 parseInput "$@"

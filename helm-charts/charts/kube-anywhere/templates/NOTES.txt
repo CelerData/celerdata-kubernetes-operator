@@ -1,0 +1,38 @@
+{{- if .Values.phoenixai.metrics.serviceMonitor.enabled }}
+{{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+ERROR: Installation of the ServiceMonitor CR for the Prometheus operator failed. Please ensure it is installed beforehand.
+{{- end }}
+{{- end }}
+
+Thank you for installing {{ .Chart.Name }}-{{ .Chart.Version }} kube-anywhere chart.
+It will install the operator and a phoenixai cluster{{ if .Values.anywhere.enabled }}, plus the PhoenixAI Anywhere console{{ end }}, please wait for a few minutes for the cluster to be ready.
+
+Please see the values.yaml for more operation information: https://github.com/CelerData/phoenixai-kubernetes-operator/blob/main/helm-charts/charts/kube-anywhere/values.yaml
+{{- if .Values.anywhere.enabled }}
+
+PhoenixAI Anywhere console:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/anywhere {{ .Values.anywhere.httpPort }}:{{ .Values.anywhere.httpPort }}
+  curl -s localhost:{{ .Values.anywhere.httpPort }}/api/v1/health
+
+{{- $adminSecret := default "anywhere-admin" .Values.anywhere.admin.existingSecret }}
+Anywhere Console accounts live in the Secret "{{ $adminSecret }}" (key = username, value = password).
+{{- if and (not .Values.anywhere.admin.existingSecret) (not .Values.anywhere.admin.users) }}
+A single "admin" account was generated with a random password. Retrieve it with:
+
+  kubectl -n {{ .Release.Namespace }} get secret {{ $adminSecret }} -o jsonpath='{.data.admin}' | base64 -d; echo
+
+NOTE: this default relies on `helm lookup` and must not be used with GitOps/ArgoCD or
+`helm template` pipelines (each sync would re-randomize the password) — set
+anywhere.admin.users or anywhere.admin.existingSecret there instead.
+{{- end }}
+
+The Cluster Console is a second sign-in page, at /cluster-console/login, for the people who query
+a cluster rather than operate the fleet: sign in there with the cluster's own PhoenixAI Database
+username and password.
+{{- else }}
+
+The PhoenixAI Anywhere console (operations & usage UI) is not enabled. Enable it with
+anywhere.enabled=true plus the required anywhere.dependencies.s3 settings — see
+charts/anywhere/values.yaml for the full reference.
+{{- end }}

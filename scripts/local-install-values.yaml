@@ -1,7 +1,7 @@
 # Operator and FE/BE images are NOT overridden here on purpose: the chart's
 # own defaults already point at the recommended versions for this release.
-celerdata:
-  celerDataFeSpec:
+phoenixai:
+  phoenixAIFeSpec:
     resources:
       limits:
         cpu: 2
@@ -16,7 +16,7 @@ celerdata:
         containerPort: 9030
         nodePort: 30002
         port: 9030
-  celerDataBeSpec:
+  phoenixAICnSpec:
     resources:
       limits:
         cpu: 2
@@ -24,7 +24,7 @@ celerdata:
       requests:
         cpu: 1
         memory: 2Gi
-  celerDataFeProxySpec:
+  phoenixAIFeProxySpec:
     enabled: true
     service:
       type: NodePort
