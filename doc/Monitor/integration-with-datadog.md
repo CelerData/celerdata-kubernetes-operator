@@ -1,3 +1,5 @@
+# Integration with Datadog
+
 Datadog provides easy integration of log and metrics collection in the kubernetes environment.
 This document describes how to integrate the Datadog with PhoenixAI.
 
