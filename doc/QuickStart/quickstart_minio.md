@@ -381,7 +381,6 @@ rather than surfacing later when someone requests a support bundle.
 
 {/* COMMON-BEGIN: fe logging note */}
 
-
 :::note Keep FE logs as files
 Do not set `LOG_CONSOLE=1` on the FE. The console's audit-log search and the support bundle's log
 collection both read log **files** from the log volume; console-only logging leaves both empty.
