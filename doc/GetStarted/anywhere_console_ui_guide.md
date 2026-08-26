@@ -18,7 +18,7 @@ collection enabled.
 
 Sections 1–4 (the Admin Console) were re-verified on 2026-08-26 against **v2.0.0-rc1** (Anywhere
 commit `7b25278`), on a shared-data 4.1.4-ee cluster with 3 coordinators and only the built-in
-warehouse, installed with [Deploy step by step](../Deploy/deploy_step_by_step_howto.md) against
+warehouse, installed with Deploy step by step against
 Amazon S3, with Prometheus scraping enabled and query collection off. Section 5 (the Cluster
 Console) was re-walked on the same build too, with query collection switched on for the Query
 insights and Query detail pages. Two things that environment cannot show were not re-checked: the
