@@ -77,7 +77,7 @@ This feature is not supported in Helm Chart. The following is a workaround:
 ```bash
 # phoenixai-community is a helm chart repository, you can show yours by `helm repo list`
 # kube-anywhere is the name of the helm chart
-helm template phoenixai phoenixai/kube-anywhere -f ./values.yaml >./sr.yaml
+helm template kube-anywhere phoenixai/kube-anywhere -f ./values.yaml >./sr.yaml
 
 # From the sr.yaml, there will a Custom Resource Definition (CRD) named PhoenixAICluster.
 # You can modify the CRD to use different storageClass or storageSize for each volume.

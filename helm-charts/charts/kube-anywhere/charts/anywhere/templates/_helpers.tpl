@@ -1,9 +1,15 @@
+{{/*
+The prefix every resource of this chart carries. Same shape as the operator and
+phoenixai subcharts alongside it: a shipped nameOverride, falling back to the
+chart name. It does NOT follow the release name — overriding it is what lets a
+second console live in a namespace that already has one.
+*/}}
 {{- define "anywhere.name" -}}
-{{- .Chart.Name -}}
+{{- default .Chart.Name .Values.nameOverride -}}
 {{- end }}
 
 {{/*
-The ServiceAccount the pod runs as; defaults to the chart name like every other resource.
+The ServiceAccount the pod runs as; defaults to the nameOverride prefix like every other resource.
 */}}
 {{- define "anywhere.serviceAccountName" -}}
 {{- default (include "anywhere.name" .) .Values.serviceAccount.name -}}

@@ -18,7 +18,7 @@ and a PhoenixAI cluster). Two ways to install it:
 
 - The operator installed with its gRPC query API exposed (`phoenixAIOperator.enableApiServer`,
   **on by default**; through the parent chart the key is
-  `operator.phoenixAIOperator.enableApiServer`). This renders the `kube-anywhere-api` Service
+  `operator.phoenixAIOperator.enableApiServer`). This renders the `kube-anywhere-operator-api` Service
   (`:9090`) that anywhere's ops data path talks to; the default `operatorApiAddrs` entry assumes
   the same namespace and the operator chart's default `nameOverride`.
 
@@ -46,7 +46,7 @@ anywhere:
 ```
 
 ```bash
-helm upgrade --install phoenixai phoenixai/kube-anywhere -n <namespace> -f my-values.yaml
+helm upgrade --install kube-anywhere phoenixai/kube-anywhere -n <namespace> -f my-values.yaml
 ```
 
 Standalone, next to an operator you install and manage separately — the chart is published as its
@@ -72,7 +72,7 @@ followed by installing its `charts/anywhere/` directory is equivalent.
 Then reach the console:
 
 ```bash
-kubectl -n <namespace> port-forward svc/anywhere 8090:8090
+kubectl -n <namespace> port-forward svc/kube-anywhere-console 8090:8090
 curl -s localhost:8090/api/v1/health
 ```
 
@@ -89,8 +89,8 @@ One anywhere serves every operator it is pointed at:
 # in my-values.yaml — namespaced-mode pairing: one anywhere, two operators
 # (prefix both keys with `anywhere.` when installing through the parent chart)
 operatorApiAddrs:
-  - kube-anywhere-api.ns-a:9090
-  - kube-anywhere-api.ns-b:9090
+  - kube-anywhere-operator-api.ns-a:9090
+  - kube-anywhere-operator-api.ns-b:9090
 watchNamespaces:
   - ns-a
   - ns-b
@@ -185,17 +185,17 @@ Operational notes:
 ## Persistence
 
 The embedded relational storage (SQLite: the usage-metering ledger, future console state) lives
-on a **standalone chart-managed PVC** named `data-<name>-0` (`data-anywhere-0` by default) —
+on a **standalone chart-managed PVC** named `data-<nameOverride>-0` (`data-kube-anywhere-console-0` by default) —
 deliberately not a StatefulSet `volumeClaimTemplate`, whose immutability would freeze the size at
 install time:
 
 - **Resize**: raise `persistence.size` in your values file and `helm upgrade -f my-values.yaml` to
   grow the volume in place, when the StorageClass has `allowVolumeExpansion: true`. Shrinking is
   rejected by Kubernetes. Some CSI drivers finish the filesystem expansion only on pod restart — if
-  the PVC reports a `FileSystemResizePending` condition, `kubectl delete pod anywhere-0` completes
+  the PVC reports a `FileSystemResizePending` condition, `kubectl delete pod kube-anywhere-console-0` completes
   it.
 - **Survives uninstall**: the PVC carries `helm.sh/resource-policy: keep` — usage records are the
-  customer's bill, remove them deliberately (`kubectl delete pvc data-anywhere-0`). A same-name
+  customer's bill, remove them deliberately (`kubectl delete pvc data-kube-anywhere-console-0`). A same-name
   reinstall adopts the kept PVC and its data.
 - **Bring your own PVC**: set `persistence.existingClaim` to a pre-created claim in the release
   namespace; the chart then renders no PVC and `size`/`storageClass` are ignored.
@@ -207,8 +207,9 @@ Prefix each with `anywhere.` when installing through the parent `kube-anywhere` 
 | Value | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | parent-chart condition: whether `kube-anywhere` installs the console (ignored standalone) |
+| `nameOverride` | `kube-anywhere-console` | prefix of every resource this chart creates (StatefulSet, Services, Secrets, ServiceAccount, RBAC, PVC `data-<nameOverride>-0`). It does not follow the release name — change it to run a second console in a namespace that already has one |
 | `image.repository` / `.tag` | the released console image, tag = chart appVersion | container image |
-| `operatorApiAddrs` | `["kube-anywhere-api:9090"]` | ALL operator gRPC API Service addresses this anywhere serves — one entry per operator; order arbitrates ownership conflicts |
+| `operatorApiAddrs` | `["kube-anywhere-operator-api:9090"]` | ALL operator gRPC API Service addresses this anywhere serves — one entry per operator; order arbitrates ownership conflicts |
 | `watchNamespaces` | `[]` (all namespaces, cluster-scoped RBAC) | the namespaces the PhoenixAI clusters live in when pairing namespaced-mode operators; one Role/RoleBinding each |
 | `admin.users` / `admin.existingSecret` | `{}` / `""` (random single `admin` account) | Admin Console accounts — see the comments in `values.yaml` for the three sources and the GitOps caveat |
 | `httpPort` | `8090` | HTTP listen/Service port |
@@ -221,13 +222,13 @@ Prefix each with `anywhere.` when installing through the parent `kube-anywhere` 
 | `license.cacheTTL` | `5m` | how long a cluster's registered-license list is served from anywhere's in-memory cache before its FE is asked again; `"0s"` disables the cache |
 | `inspection.enabledRules` / `.disabledRules` | `[]` / `[]` (all rules run) | CR-inspection rule selection; rule ids and meanings are listed as comments in `values.yaml` |
 | `env` | `[]` | extra container env vars, e.g. `GODEBUG` (anywhere's own configuration is not env-settable — it goes through the rendered config file) |
-| `serviceAccount.name` / `.annotations` / `.labels` | `""` (chart name) / `{}` / `{}` | the always-created ServiceAccount the pod runs as (annotations e.g. for cloud IAM bindings) |
+| `serviceAccount.name` / `.annotations` / `.labels` | `""` (the `nameOverride` prefix) / `{}` / `{}` | the always-created ServiceAccount the pod runs as (annotations e.g. for cloud IAM bindings) |
 | `persistence.size` | `10Gi` | data PVC size; growable via `helm upgrade` (StorageClass must allow expansion), never shrinkable |
 | `persistence.storageClass` | `""` (cluster default) | StorageClass of the chart-rendered PVC |
 | `persistence.existingClaim` | `""` | use a pre-created PVC instead of rendering one (`size`/`storageClass` then ignored) |
 
 See `values.yaml` for the full list. Configuration reaches the container as a rendered config
-file (the `anywhere-config` Secret — a Secret because the inlined `dependencies:` section
+file (the `kube-anywhere-console-config` Secret — a Secret because the inlined `dependencies:` section
 carries credentials — mounted and passed via `--config`); a checksum annotation on the pod
 template rolls the pod whenever the rendered file changes. There are no `PHOENIXAI_ANYWHERE_*`
 environment variables.

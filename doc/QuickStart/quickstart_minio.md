@@ -349,7 +349,7 @@ anywhere:
 
   # The operator's gRPC API Service, in this namespace.
   operatorApiAddrs:
-    - "kube-anywhere-api:9090"
+    - "kube-anywhere-operator-api:9090"
   watchNamespaces:
     - "phoenixai"
 
@@ -370,7 +370,7 @@ anywhere:
 ```
 
 ```bash
-helm install phoenixai phoenixai/kube-anywhere \
+helm install kube-anywhere phoenixai/kube-anywhere \
   --namespace phoenixai -f cluster-values.yaml
 kubectl -n phoenixai get pods -w
 ```
@@ -380,7 +380,6 @@ prefix, so a wrong endpoint, credential or path-style setting is reported as an 
 rather than surfacing later when someone requests a support bundle.
 
 {/* COMMON-BEGIN: fe logging note */}
-
 
 :::note Keep FE logs as files
 Do not set `LOG_CONSOLE=1` on the FE. The console's audit-log search and the support bundle's log
@@ -514,7 +513,7 @@ The console was installed together with the cluster (the `anywhere:` block above
 
 ```bash
 kubectl -n phoenixai rollout status statefulset/anywhere
-kubectl -n phoenixai port-forward svc/anywhere 8090:8090
+kubectl -n phoenixai port-forward svc/kube-anywhere-console 8090:8090
 ```
 
 Check the service answers, then open the console at `http://localhost:8090`:
@@ -524,11 +523,11 @@ curl -s localhost:8090/api/v1/health
 # {"code":20000,"data":{"status":"ok"}}
 ```
 
-Admin accounts live in the `anywhere-admin` Secret — one key per username. If you did not
+Admin accounts live in the `kube-anywhere-console-admin` Secret — one key per username. If you did not
 supply any, a single `admin` account was generated with a random password:
 
 ```bash
-kubectl -n phoenixai get secret anywhere-admin \
+kubectl -n phoenixai get secret kube-anywhere-console-admin \
   -o jsonpath='{.data.admin}' | base64 -d; echo
 ```
 

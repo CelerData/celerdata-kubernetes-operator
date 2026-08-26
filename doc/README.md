@@ -34,6 +34,7 @@ site.
 - [Mount CSI Ephemeral Volumes](./Configure/mount_csi_volumes_howto.md)
 - [Mount External ConfigMaps Or Secrets](./Configure/mount_external_configmaps_or_secrets_howto.md)
 - [Run With a Read-Only Root Filesystem](./Configure/setup-phoenixai-when-readOnlyRootFilesystem-is-true.md)
+- [Use MinIO for Shared Data](./Configure/use_minio_for_shared_data_howto.md)
 
 ## Scale
 
@@ -55,10 +56,6 @@ site.
 - [Prometheus And Grafana](./Monitor/integration-prometheus-grafana.md)
 - [Anywhere Console monitoring](./Monitor/anywhere-monitoring.md)
 - [Datadog](./Monitor/integration-with-datadog.md)
-
-## How-to Guides
-
-- [Use MinIO for Shared Data](./how-to/use_minio_for_shared_data_howto.md)
 
 ## Reference
 

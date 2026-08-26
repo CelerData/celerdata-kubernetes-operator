@@ -172,7 +172,7 @@ phoenixai:
 Create the cluster using Helm:
 
 ```bash
-helm install -f ./phoenixai-values.yaml phoenixai phoenixai/kube-anywhere
+helm install -f ./phoenixai-values.yaml kube-anywhere phoenixai/kube-anywhere
 
 # make sure the cluster has been successfully deployed
 kubectl get pods
@@ -301,7 +301,7 @@ sDIR s3://xxx/data/7351ce6a-f4a4-4937-a876-cb8801085aea/meta/image/automated_clu
 ### 4. Delete the created cluster
 
 ```bash
-helm uninstall phoenixai
+helm uninstall kube-anywhere
 
 # delete pvcs
 kubectl get pvc | awk '{if (NR>1){print $1}}' | xargs kubectl delete pvc
@@ -373,7 +373,7 @@ This time, we will deploy the cluster with the following command:
 # 1. make sure you are using the at least v1.10.0 version of Operator and CRD
 # 2. the command to deploy the cluster is different from the first time. We specify two files, and the override.yaml
 #    is used for the recovery configuration.
-helm install -f ./phoenixai-values.yaml -f override.yaml phoenixai phoenixai/kube-anywhere --version 1.10.0
+helm install -f ./phoenixai-values.yaml -f override.yaml kube-anywhere phoenixai/kube-anywhere --version 1.10.0
 
 ```
 

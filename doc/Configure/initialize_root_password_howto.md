@@ -81,7 +81,7 @@ Execute Deployment with Custom Specifications. Run the subsequent command to dep
 PhoenixAI cluster.
 
 ```shell
-helm install -f my-values.yaml phoenixai phoenixai/kube-anywhere
+helm install -f my-values.yaml kube-anywhere phoenixai/kube-anywhere
 ```
 
 ## 4. Access Your Cluster
