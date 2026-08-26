@@ -494,11 +494,9 @@ kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
 
 ## Load data and query it
 
-Load your own data, or use these datasets and queries to see the system in action. These two come
-from the [StarRocks shared-data quick start](https://docs.starrocks.io/docs/quick_start/shared-data/)
-— 423,725 New York City crash records and 22,931 hourly weather readings — and they are worth the
-few minutes, because most of the console has little to show until a cluster holds data that has
-been written and queried.
+Load your own data, or use these datasets and queries to see the system in action. These two datasets
+— 423,725 New York City crash records and 22,931 hourly weather readings — are worth the
+few minutes to work through the loading process.
 
 **1. Reach the cluster over HTTP.** Loading is an HTTP request. Sent straight at a coordinator it is
 answered with an HTTP 307 naming a compute node's *in-cluster* address, which your own machine
