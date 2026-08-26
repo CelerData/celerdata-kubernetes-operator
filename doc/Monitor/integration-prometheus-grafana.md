@@ -168,7 +168,7 @@ Run the following commands to deploy PhoenixAI operator and PhoenixAI cluster,
 ```shell
 helm repo add phoenixai https://celerdata.github.io/phoenixai-kubernetes-operator
 helm repo update phoenixai
-helm install phoenixai -f sr-values.yaml phoenixai/kube-anywhere
+helm install kube-anywhere -f sr-values.yaml phoenixai/kube-anywhere
 ```
 
 ### 2.2 Turn on the Prometheus metrics scrape by using ServiceMonitor CRD

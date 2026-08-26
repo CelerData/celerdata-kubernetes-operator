@@ -57,7 +57,7 @@ curl -s -b cookies.txt -X POST \
   localhost:8090/api/v1/admin/dependencies/prometheus/check
 ```
 
-Admin passwords live in the `kube-anywhere-admin` Secret, one key per username.
+Admin passwords live in the `kube-anywhere-console-admin` Secret, one key per username.
 
 A correctly wired installation reports every probe `ok`:
 

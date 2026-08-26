@@ -17,8 +17,6 @@ kind-specific except the `storageClassName` and the resource sizes.
 For self-hosted or air-gapped object storage, see
 [Quick start — MinIO](./quickstart_minio.md), which differs only in how storage is configured.
 
-{/* COMMON-BEGIN: prerequisites */}
-
 ## Before you start
 
 | You need | Notes |
@@ -41,10 +39,6 @@ operator, a PhoenixAI cluster, and (with `anywhere.enabled=true`) the Anywhere c
 distributed as a release archive, so if you do not see it in the repository, install it from the
 `.tgz` for your release.
 
-{/* COMMON-END: prerequisites */}
-
-{/* DELTA-BEGIN: object storage prerequisites */}
-
 ## The bucket
 
 Create (or choose) an S3 bucket, and have ready:
@@ -55,10 +49,6 @@ Create (or choose) an S3 bucket, and have ready:
 
 One bucket serves both the cluster and the console, kept apart by key prefix — this guide uses
 `data/` for the cluster and `anywhere/` for the console. Nothing else in the bucket is touched.
-
-{/* DELTA-END: object storage prerequisites */}
-
-{/* COMMON-BEGIN: namespace and prometheus */}
 
 ## Create the namespace and install Prometheus
 
@@ -92,8 +82,6 @@ console's monitoring pages stay empty with nothing on screen to say why.
 Add it through `metrics.serviceMonitor.labels` in the values below. If you
 installed the stack under a different release name, use that name.
 :::
-
-{/* COMMON-END: namespace and prometheus */}
 
 ## Install the operator, the cluster and the console
 
@@ -182,6 +170,17 @@ phoenixai:
       storageSize: 10Gi
       logStorageSize: 1Gi
 
+  # The FE proxy (nginx) is what makes the "Load data and query it" step below
+  # possible from your own machine: it follows the HTTP 307 a coordinator answers
+  # a load with, which points at a compute node address only routable inside the
+  # cluster. Leave it out if you will only ever load from inside the cluster.
+  phoenixAIFeProxySpec:
+    enabled: true
+    replicas: 1
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { cpu: 1, memory: 1Gi }
+
 anywhere:
   # The console is opt-in because it needs object storage of its own.
   enabled: true
@@ -191,7 +190,7 @@ anywhere:
 
   # The operator's gRPC API Service, in this namespace.
   operatorApiAddrs:
-    - "kube-anywhere-api:9090"
+    - "kube-anywhere-operator-api:9090"
   watchNamespaces:
     - "phoenixai"
 
@@ -212,21 +211,15 @@ anywhere:
 ```
 
 ```bash
-helm install phoenixai phoenixai/kube-anywhere \
+helm install kube-anywhere phoenixai/kube-anywhere \
   --namespace phoenixai -f cluster-values.yaml
 kubectl -n phoenixai get pods -w
 ```
-
-{/* COMMON-BEGIN: fe logging note */}
 
 :::note Keep FE logs as files
 Do not set `LOG_CONSOLE=1` on the FE. The console's audit-log search and the support bundle's log
 collection both read log **files** from the log volume; console-only logging leaves both empty.
 :::
-
-{/* COMMON-END: fe logging note */}
-
-{/* COMMON-BEGIN: verify cluster sql */}
 
 When the pods are running, check the cluster over SQL:
 
@@ -234,10 +227,6 @@ When the pods are running, check the cluster over SQL:
 kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
   mysql -h127.0.0.1 -P9030 -uroot -e "SHOW BACKENDS\G SHOW WAREHOUSES\G"
 ```
-
-{/* COMMON-END: verify cluster sql */}
-
-{/* COMMON-BEGIN: warehouse */}
 
 ## Install a warehouse
 
@@ -306,17 +295,135 @@ kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
   mysql -h127.0.0.1 -P9030 -uroot -e "SHOW WAREHOUSES\G"
 ```
 
-{/* COMMON-END: warehouse */}
+## Load data and query it
 
-{/* COMMON-BEGIN: sign in */}
+Load your own data, or use these datasets and queries to see the system in action. These two come
+from the [StarRocks shared-data quick start](https://docs.starrocks.io/docs/quick_start/shared-data/)
+— 423,725 New York City crash records and 22,931 hourly weather readings — and they are worth the
+few minutes, because most of the console has little to show until a cluster holds data that has
+been written and queried.
+
+**1. Reach the cluster over HTTP.** Loading is an HTTP request. Sent straight at a coordinator it is
+answered with an HTTP 307 naming a compute node's *in-cluster* address, which your own machine
+cannot resolve. The FE proxy follows that redirect for you, so send the request there instead — the
+`phoenixAIFeProxySpec` block in the values file above is what created it.
+
+```bash
+kubectl -n phoenixai port-forward svc/kube-anywhere-fe-proxy-service 8080:8080
+```
+
+Leave that running, and use a second terminal for everything below.
+
+:::note A port forward is for you, not for your users
+It lasts only as long as the command runs, and only on the machine running it. To let colleagues
+load data, ask your Kubernetes administrator to put an Ingress or a load-balancing Service in front
+of `kube-anywhere-fe-proxy-service`. See
+[Load Data Using Stream Load](../Operate/load_data_using_stream_load_howto.md).
+:::
+
+**2. Create the database and the two tables:**
+
+```bash
+kubectl -n phoenixai exec -i kube-anywhere-fe-0 -- mysql -h127.0.0.1 -P9030 -uroot <<'SQL'
+CREATE DATABASE IF NOT EXISTS quickstart;
+USE quickstart;
+CREATE TABLE IF NOT EXISTS crashdata (
+    CRASH_DATE DATETIME, BOROUGH STRING, ZIP_CODE STRING, LATITUDE INT, LONGITUDE INT,
+    LOCATION STRING, ON_STREET_NAME STRING, CROSS_STREET_NAME STRING, OFF_STREET_NAME STRING,
+    CONTRIBUTING_FACTOR_VEHICLE_1 STRING, CONTRIBUTING_FACTOR_VEHICLE_2 STRING, COLLISION_ID INT,
+    VEHICLE_TYPE_CODE_1 STRING, VEHICLE_TYPE_CODE_2 STRING);
+CREATE TABLE IF NOT EXISTS weatherdata (
+    DATE DATETIME, NAME STRING, HourlyDewPointTemperature STRING, HourlyDryBulbTemperature STRING,
+    HourlyPrecipitation STRING, HourlyPresentWeatherType STRING, HourlyPressureChange STRING,
+    HourlyPressureTendency STRING, HourlyRelativeHumidity STRING, HourlySkyConditions STRING,
+    HourlyVisibility STRING, HourlyWetBulbTemperature STRING, HourlyWindDirection STRING,
+    HourlyWindGustSpeed STRING, HourlyWindSpeed STRING);
+SQL
+```
+
+**3. Download the two files:**
+
+```bash
+curl -O https://raw.githubusercontent.com/StarRocks/demo/master/documentation-samples/quickstart/datasets/NYPD_Crash_Data.csv
+curl -O https://raw.githubusercontent.com/StarRocks/demo/master/documentation-samples/quickstart/datasets/72505394728.csv
+```
+
+**4. Load the crash data.** The `columns:` list names every column in the file, in order, so the
+ones the table does not keep can be skipped; `CRASH_DATE` is assembled from the file's separate date
+and time fields. `-u root:` ends in a colon because this quick start never set a root password — if
+you set one, it goes after the colon.
+
+```bash
+curl --location-trusted -u root: \
+    -T ./NYPD_Crash_Data.csv \
+    -H "label:crashdata-0" \
+    -H "column_separator:," \
+    -H "skip_header:1" \
+    -H "enclose:\"" \
+    -H "max_filter_ratio:1" \
+    -H "columns:tmp_CRASH_DATE, tmp_CRASH_TIME, CRASH_DATE=str_to_date(concat_ws(' ', tmp_CRASH_DATE, tmp_CRASH_TIME), '%m/%d/%Y %H:%i'),BOROUGH,ZIP_CODE,LATITUDE,LONGITUDE,LOCATION,ON_STREET_NAME,CROSS_STREET_NAME,OFF_STREET_NAME,NUMBER_OF_PERSONS_INJURED,NUMBER_OF_PERSONS_KILLED,NUMBER_OF_PEDESTRIANS_INJURED,NUMBER_OF_PEDESTRIANS_KILLED,NUMBER_OF_CYCLIST_INJURED,NUMBER_OF_CYCLIST_KILLED,NUMBER_OF_MOTORIST_INJURED,NUMBER_OF_MOTORIST_KILLED,CONTRIBUTING_FACTOR_VEHICLE_1,CONTRIBUTING_FACTOR_VEHICLE_2,CONTRIBUTING_FACTOR_VEHICLE_3,CONTRIBUTING_FACTOR_VEHICLE_4,CONTRIBUTING_FACTOR_VEHICLE_5,COLLISION_ID,VEHICLE_TYPE_CODE_1,VEHICLE_TYPE_CODE_2,VEHICLE_TYPE_CODE_3,VEHICLE_TYPE_CODE_4,VEHICLE_TYPE_CODE_5" \
+    -XPUT http://localhost:8080/api/quickstart/crashdata/_stream_load
+```
+
+A successful load answers with `"Status": "Success"` and the rows it took. One row of this file is
+rejected by the date conversion, which is why `max_filter_ratio` is set — expect
+`"NumberLoadedRows": 423725` and `"NumberFilteredRows": 1`.
+
+**5. Load the weather data.** The same shape, with this file's own (much longer) column list:
+
+```bash
+curl --location-trusted -u root: \
+    -T ./72505394728.csv \
+    -H "label:weather-0" \
+    -H "column_separator:," \
+    -H "skip_header:1" \
+    -H "enclose:\"" \
+    -H "max_filter_ratio:1" \
+    -H "columns: STATION, DATE, LATITUDE, LONGITUDE, ELEVATION, NAME, REPORT_TYPE, SOURCE, HourlyAltimeterSetting, HourlyDewPointTemperature, HourlyDryBulbTemperature, HourlyPrecipitation, HourlyPresentWeatherType, HourlyPressureChange, HourlyPressureTendency, HourlyRelativeHumidity, HourlySkyConditions, HourlySeaLevelPressure, HourlyStationPressure, HourlyVisibility, HourlyWetBulbTemperature, HourlyWindDirection, HourlyWindGustSpeed, HourlyWindSpeed, Sunrise, Sunset, DailyAverageDewPointTemperature, DailyAverageDryBulbTemperature, DailyAverageRelativeHumidity, DailyAverageSeaLevelPressure, DailyAverageStationPressure, DailyAverageWetBulbTemperature, DailyAverageWindSpeed, DailyCoolingDegreeDays, DailyDepartureFromNormalAverageTemperature, DailyHeatingDegreeDays, DailyMaximumDryBulbTemperature, DailyMinimumDryBulbTemperature, DailyPeakWindDirection, DailyPeakWindSpeed, DailyPrecipitation, DailySnowDepth, DailySnowfall, DailySustainedWindDirection, DailySustainedWindSpeed, DailyWeather, MonthlyAverageRH, MonthlyDaysWithGT001Precip, MonthlyDaysWithGT010Precip, MonthlyDaysWithGT32Temp, MonthlyDaysWithGT90Temp, MonthlyDaysWithLT0Temp, MonthlyDaysWithLT32Temp, MonthlyDepartureFromNormalAverageTemperature, MonthlyDepartureFromNormalCoolingDegreeDays, MonthlyDepartureFromNormalHeatingDegreeDays, MonthlyDepartureFromNormalMaximumTemperature, MonthlyDepartureFromNormalMinimumTemperature, MonthlyDepartureFromNormalPrecipitation, MonthlyDewpointTemperature, MonthlyGreatestPrecip, MonthlyGreatestPrecipDate, MonthlyGreatestSnowDepth, MonthlyGreatestSnowDepthDate, MonthlyGreatestSnowfall, MonthlyGreatestSnowfallDate, MonthlyMaxSeaLevelPressureValue, MonthlyMaxSeaLevelPressureValueDate, MonthlyMaxSeaLevelPressureValueTime, MonthlyMaximumTemperature, MonthlyMeanTemperature, MonthlyMinSeaLevelPressureValue, MonthlyMinSeaLevelPressureValueDate, MonthlyMinSeaLevelPressureValueTime, MonthlyMinimumTemperature, MonthlySeaLevelPressure, MonthlyStationPressure, MonthlyTotalLiquidPrecipitation, MonthlyTotalSnowfall, MonthlyWetBulb, AWND, CDSD, CLDD, DSNW, HDSD, HTDD, NormalsCoolingDegreeDay, NormalsHeatingDegreeDay, ShortDurationEndDate005, ShortDurationEndDate010, ShortDurationEndDate015, ShortDurationEndDate020, ShortDurationEndDate030, ShortDurationEndDate045, ShortDurationEndDate060, ShortDurationEndDate080, ShortDurationEndDate100, ShortDurationEndDate120, ShortDurationEndDate150, ShortDurationEndDate180, ShortDurationPrecipitationValue005, ShortDurationPrecipitationValue010, ShortDurationPrecipitationValue015, ShortDurationPrecipitationValue020, ShortDurationPrecipitationValue030, ShortDurationPrecipitationValue045, ShortDurationPrecipitationValue060, ShortDurationPrecipitationValue080, ShortDurationPrecipitationValue100, ShortDurationPrecipitationValue120, ShortDurationPrecipitationValue150, ShortDurationPrecipitationValue180, REM, BackupDirection, BackupDistance, BackupDistanceUnit, BackupElements, BackupElevation, BackupEquipment, BackupLatitude, BackupLongitude, BackupName, WindEquipmentChangeDate" \
+    -XPUT http://localhost:8080/api/quickstart/weatherdata/_stream_load
+```
+
+Expect `"NumberLoadedRows": 22931` and no filtered rows.
+
+**6. Ask the data something.** Crashes per hour, and the average temperature per hour:
+
+```bash
+kubectl -n phoenixai exec -i kube-anywhere-fe-0 -- mysql -h127.0.0.1 -P9030 -uroot -D quickstart <<'SQL'
+SELECT COUNT(*), date_trunc("hour", crashdata.CRASH_DATE) AS Time
+FROM crashdata GROUP BY Time ORDER BY Time ASC LIMIT 200;
+
+SELECT avg(HourlyDryBulbTemperature), date_trunc("hour", weatherdata.DATE) AS Time
+FROM weatherdata GROUP BY Time ORDER BY Time ASC LIMIT 100;
+SQL
+```
+
+Then the question neither table answers alone — how many crashes happened in the hours when
+visibility was poor, and what the weather was:
+
+```bash
+kubectl -n phoenixai exec -i kube-anywhere-fe-0 -- mysql -h127.0.0.1 -P9030 -uroot -D quickstart <<'SQL'
+SELECT COUNT(DISTINCT c.COLLISION_ID) AS Crashes,
+       truncate(avg(w.HourlyDryBulbTemperature), 1) AS Temp_F,
+       truncate(avg(w.HourlyVisibility), 2) AS Visibility,
+       max(w.HourlyPrecipitation) AS Precipitation,
+       date_format((date_trunc("hour", c.CRASH_DATE)), '%d %b %Y %H:%i') AS Hour
+FROM crashdata c
+LEFT JOIN weatherdata w ON date_trunc("hour", c.CRASH_DATE)=date_trunc("hour", w.DATE)
+WHERE w.HourlyVisibility BETWEEN 0.0 AND 1.0
+GROUP BY Hour ORDER BY Crashes DESC LIMIT 100;
+SQL
+```
+
+Swap the `WHERE` clause for `w.HourlyDryBulbTemperature BETWEEN 0.0 AND 40.5` to ask the same
+question about freezing hours instead.
 
 ## Sign in
 
 The console was installed together with the cluster (the `anywhere:` block above). Wait for it:
 
 ```bash
-kubectl -n phoenixai rollout status statefulset/anywhere
-kubectl -n phoenixai port-forward svc/anywhere 8090:8090
+kubectl -n phoenixai rollout status statefulset/kube-anywhere-console
+kubectl -n phoenixai port-forward svc/kube-anywhere-console 8090:8090
 ```
 
 Check the service answers, then open the console at `http://localhost:8090`:
@@ -326,11 +433,11 @@ curl -s localhost:8090/api/v1/health
 # {"code":20000,"data":{"status":"ok"}}
 ```
 
-Admin accounts live in the `anywhere-admin` Secret — one key per username. If you did not
+Admin accounts live in the `kube-anywhere-console-admin` Secret — one key per username. If you did not
 supply any, a single `admin` account was generated with a random password:
 
 ```bash
-kubectl -n phoenixai get secret anywhere-admin \
+kubectl -n phoenixai get secret kube-anywhere-console-admin \
   -o jsonpath='{.data.admin}' | base64 -d; echo
 ```
 
@@ -342,10 +449,6 @@ system monitoring — go to `http://localhost:8090/cluster-console/login` and si
 user from the cluster itself. That is a PhoenixAI database user, created in the cluster with SQL,
 not an Anywhere account.
 
-{/* COMMON-END: sign in */}
-
-{/* COMMON-BEGIN: what to enable next */}
-
 ## What to enable next
 
 **Query insights is off by default.** The page needs two settings, in two different places:
@@ -355,10 +458,6 @@ not an Anywhere account.
    `ADMIN SET FRONTEND CONFIG`.
 
 The page names both in its empty state, so you do not have to remember which is missing.
-
-{/* COMMON-END: what to enable next */}
-
-{/* COMMON-BEGIN: troubleshooting shared */}
 
 ## Troubleshooting
 
@@ -386,4 +485,3 @@ community builds rather than enterprise `-ee`.
 or the ServiceMonitors were not rendered (`metrics.serviceMonitor.enabled`). The console has a
 dependency check for this under the admin API.
 
-{/* COMMON-END: troubleshooting shared */}

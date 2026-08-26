@@ -10,11 +10,20 @@ description: What each page of the two PhoenixAI Anywhere consoles shows, who ca
 A high-level tour of the Anywhere web console: what it does, who signs in, where each user
 goes, and what every page shows.
 
-:::note Verified on 2026-08-23
+:::note Verified on 2026-08-23; re-verified against v2.0.0-rc1 on 2026-08-26
 Walked page by page against a console built from Anywhere `main` (commit `97a0dec`), serving a
 shared-data PhoenixAI 4.1.4-ee cluster — 3 coordinators, 2 warehouses — brought up with
 [Quick start — MinIO](../QuickStart/quickstart_minio.md), with Prometheus scraping and query
 collection enabled.
+
+Sections 1–4 (the Admin Console) were re-verified on 2026-08-26 against **v2.0.0-rc1** (Anywhere
+commit `7b25278`), on a shared-data 4.1.4-ee cluster with 3 coordinators and only the built-in
+warehouse, installed with [Deploy step by step](../Deploy/deploy_step_by_step_howto.md) against
+Amazon S3, with Prometheus scraping enabled and query collection off. Section 5 (the Cluster
+Console) was re-walked on the same build too, with query collection switched on for the Query
+insights and Query detail pages. Two things that environment cannot show were not re-checked: the
+**Materialized views** and **Views** tabs, which have nothing to list there, and the **Audit logs**
+results table. Screenshots throughout remain those of the original environment.
 
 The cluster holds the [StarRocks shared-data
 tutorial](https://docs.starrocks.io/docs/quick_start/shared-data/) dataset — 423,725 NYC crash
@@ -150,18 +159,17 @@ which holds a **Theme** selector (Light / Dark / System), **Sign out**, and the 
 
 Cluster Console URLs never name the cluster — the session supplies it. That is why the paths are
 the same for every cluster, and why switching clusters means signing in again. The signed-in
-cluster is shown in the header (`phoenixai/kube-phoenixai` in the screenshots below), beside the
+cluster is shown in the header (`phoenixai/kube-anywhere` in the screenshots below), beside the
 three destinations and the user menu.
 
 Pages that render times take a display timezone from the UI and put it in the URL (`?tz=UTC`), so
 a link reproduces what the sender was looking at.
 
-**Finding the other console.** The two sign-in pages now link to each other — the admin page
-offers *"Signing in to a cluster instead? Cluster Console sign-in"*, and the cluster page offers
-*"Looking for the Anywhere Console? Anywhere Console sign-in"* — so neither audience has to be
-told a URL. There is also a hand-off from a cluster's detail page in the Admin Console
-(**Open cluster**), which opens the cluster sign-in with the cluster preselected; that is context
-only, credentials are still required.
+**Finding the other console.** Both paths render the same sign-in page, which carries two tabs —
+**Platform administrator** and **Database user** — so neither audience has to be told a URL: the
+path you arrive on simply preselects its tab. There is also a hand-off from a cluster's detail
+page in the Admin Console (**Open cluster**), which opens that page on the **Database user** tab
+with the cluster preselected; that is context only, credentials are still required.
 
 The cluster picker is preselected from `?cluster=ns/name` (the admin hand-off, or a bounce
 carrying an expired session's cluster) or, failing that, from the last cluster signed into from
@@ -202,9 +210,9 @@ One cluster, as seven tabs addressed by `?tab=` so links stay shallow (`overview
 and carries no parameter). **Open cluster** in the top-right hands off to the Cluster Console for
 this cluster.
 
-**Overview** — cluster properties (ID, name, namespace, type, version, status, warehouses,
+**Overview** — cluster properties (name, namespace, type, version, status, warehouses,
 created, license expiry, time zone), month-to-date CCU, node and warehouse activity, data-volume
-change over 24 hours, and a 7-day cluster usage trend.
+change over 24 hours, and a 7-day cluster usage trend, annotated **All times in UTC**.
 
 ![Cluster detail, Overview](./images/cluster-detail-overview.jpg)
 
@@ -229,17 +237,27 @@ Which charts appear, and which aggregation each defaults to, depends on what the
 PhoenixAI version exposes — treat any specific set as an example rather than a fixed list; here it
 is Cluster Data Size, Query QPS, Ingested Times and Ingested Rows.
 
+:::note A chart can look empty when it is only scrolled
+Every chart has a horizontal scrollbar of its own and opens on a zoomed viewport, so the span you
+can see is often much shorter than the range control claims — a chart labelled **Last 1 hour** may
+be showing nine minutes of it, and recent data can sit off-screen to the right. Before concluding
+that a metric is missing, drag the chart's scrollbar. The Cluster Console's
+[System monitoring](#system-monitoring--cluster-consolemonitoring) page draws the same charts and
+behaves the same way.
+:::
+
 ![Cluster detail, Monitoring — the step in Cluster Data Size and the spike to 400k+ in Ingested Rows are the 423,725-row stream load](./images/real-cluster-detail-monitoring.jpg)
 
 **Health checks** — this cluster's checks by type (info / warning / critical), status, component
 and message, each naming the check that produced it, with sortable columns, filters and
-pagination. A real cluster produces a substantial list — 24 findings here — and they are specific
-and actionable rather than generic: an expiring license, CPU limits set on latency-sensitive
-components, serial pod management, multi-replica components not spread across topology domains.
+pagination. A real cluster produces a substantial list — a couple of dozen findings on a newly
+built cluster — and they are specific and actionable rather than generic: an expiring license,
+CPU limits set on latency-sensitive components, multi-replica components not spread across
+topology domains.
 
 ![Cluster detail, Health checks — 24 checks on a newly built cluster](./images/real-cluster-detail-health-checks.jpg)
 
-**Diagnostics** — two collapsed libraries, each reporting how many entries it holds (18 SQL
+**Diagnostics** — two collapsed libraries, each reporting how many entries it holds (16 SQL
 commands and 1 shell command here). **SQL commands** runs saved read-only commands for this
 cluster; **Shell commands** runs a saved shell command inside one pod. Expanding a library reveals
 its picker, **Run**, and **New command**; results report exit code, stdout and stderr. Creating
@@ -253,7 +271,8 @@ table marking which one is effective. Times are UTC.
 
 A newly created cluster already carries a license — nobody registers one by hand — but it is
 short-lived, so a fresh environment shows **Expiring soon** and Health checks raises
-`license-expiring-soon` as critical. That is expected on a new cluster, not a misconfiguration.
+`license-invalid` as critical (until 2026-08-24 this rule was `license-expiring-soon`, before it
+merged with `license-missing`). That is expected on a new cluster, not a misconfiguration.
 
 ![Cluster detail, License — a new cluster, its license expiring in 7 days](./images/real-cluster-detail-license.jpg)
 
@@ -359,10 +378,11 @@ or stale link never shows a sign-in page.
 
 ### Sign in — `/cluster-console/login`
 
-Select the cluster from the list, then enter that cluster's database username and password. The
-two credential fields are labelled **SR username** and **SR password**. The form notes that
-cluster credentials come from your platform admin, and links back to the Anywhere Console
-sign-in. Its hero panel is the cluster user's own, not the admin page's.
+The **Database user** tab of the shared sign-in page. Select the cluster from the list, then
+enter that cluster's database username and password. The two credential fields are labelled simply
+**Username** and **Password** — the same as the administrator tab, because both tabs ask for the
+same kinds of thing. The form notes that cluster credentials come from your platform admin.
+Reaching the administrator sign-in is a tab away, and the brand hero panel is shared by both.
 
 ![Cluster Console sign-in](./images/cluster-console-sign-in.jpg)
 
@@ -381,28 +401,29 @@ here as they are added.
 ![Data catalog, databases](./images/cc-catalog-databases.jpg)
 
 **Database detail** — tabs for **Tables**, **Materialized views**, **Views** and **Tasks**
-(`?view=`). The Tables tab lists rows, size, creation time and description.
+(`?view=`). The Tables tab lists rows, size, creation time, and the table model under a column
+headed **Remark** (`OLAP` for an ordinary table) rather than a free-text description.
 
 ![Database detail, Tables — the note above the table gives the cluster's own time zone, because these timestamps are formatted by the cluster](./images/real-cc-database-tables.jpg)
 
 **Tasks** groups jobs by kind in a left-hand rail — Kafka Import, Other Import, Export, Schema
-Change, Creating View (`?task=`) — and **the columns differ by kind**: an import job carries name,
-status, table, created, paused, task count, progress and the reason a stage changed, and is
-searchable by job name; a schema-change job carries table, status, progress, start and end time,
-timeout and details, and is searchable by table. A kind with nothing to show reports
+Change, Creating View (`?task=`) — and **the columns differ by kind**: an import job carries its
+identifying **Tag**, state, table, created, paused, task count, progress and the reason a stage
+changed, and is searchable by job name; a schema-change job carries table, status, progress, start
+and end time, timeout and details, and is searchable by table. A kind with nothing to show reports
 "No tasks reported."
 
 ![Database detail, Tasks — a completed schema change](./images/cc-database-tasks.jpg)
 
-**Table detail** — tabs for **Columns** (type, nullability, key, default, comment), **DDL**, and
-**Partitions** (`?tab=`).
+**Table detail** — tabs for **Columns** (type, nullability, key, default, extra, comment), **DDL**
+and **Partitions** (`?tab=`).
 
 ![Table detail, Columns](./images/cc-table-detail.jpg)
 
-Partitions lists status, version, partition key, range, bucket column, buckets, replicas and size,
-one row per partition. In shared-data mode the **Replicas** column reads `0` — replication is the
-object store's job, not the cluster's — and an unpartitioned table shows a single row named after
-the table.
+Partitions lists state, visible version, partition key, range, bucket column, buckets, duplications
+and size, one row per partition. In shared-data mode the **Duplications** column reads `0` —
+replication is the object store's job, not the cluster's — and an unpartitioned table shows a
+single row named after the table.
 
 ![Table detail, Partitions — a table with eight daily partitions](./images/cc-table-partitions.jpg)
 
@@ -469,7 +490,10 @@ section.
 
 **Query profile** is the cluster's own profile text — summary, planner timings and the operator
 tree — in a scrollable reader with a copy action. It is present only for queries the cluster
-profiled.
+profiled, and where it is absent the tab says so on the record itself, naming the query's latency
+and the `big_query_profile_threshold` that excluded it. A tutorial-sized query finishing in
+milliseconds is well under the default 30s threshold, so "not profiled" is the ordinary answer
+there rather than a sign that anything is wrong.
 
 ![Query profile](./images/cc-query-profile.jpg)
 
@@ -518,4 +542,3 @@ switchable views of the same series.
 | License history never loads | `/license` | Backed by an unbuilt endpoint; the panel shows a JSON parse error |
 | Audit logs hidden from non-root users | `/cluster-console/query-insights` | Gated on the username being exactly `root`, with no hint for anyone else |
 | **Session expired** dialog is a dead end after a credential rejection | Cluster Console | When the signed-in user's password changed in the cluster, the dialog says it will redirect, does not, and blocks the page under it; only clearing the session cookie escapes. A plain session *expiry* redirects normally |
-| Credential fields say "SR" | `/cluster-console/login` | Labelled **SR username** / **SR password** rather than in the product's own vocabulary |

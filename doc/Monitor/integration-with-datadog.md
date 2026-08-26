@@ -66,10 +66,10 @@ Install or upgrade your phoenixai cluster:
 
 ```bash
 # install
-helm install -n phoenixai phoenixai -f sr-values.yaml phoenixai/kube-anywhere
+helm install -n phoenixai kube-anywhere -f sr-values.yaml phoenixai/kube-anywhere
 
 # upgrade
-helm upgrade -n phoenixai phoenixai -f sr-values.yaml phoenixai/kube-anywhere
+helm upgrade -n phoenixai kube-anywhere -f sr-values.yaml phoenixai/kube-anywhere
 ```
 
 When you execute `helm install` or `helm upgrade` command, the rendered configuration will be passed to the phoenixai
