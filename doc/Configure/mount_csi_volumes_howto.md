@@ -85,7 +85,7 @@ kubectl get csidriver csi.spiffe.io
 Then deploy the cluster:
 
 ```bash
-helm install phoenixai phoenixai/kube-anywhere -f values.yaml
+helm install kube-anywhere phoenixai/kube-anywhere -f values.yaml
 ```
 
 with `values.yaml`:

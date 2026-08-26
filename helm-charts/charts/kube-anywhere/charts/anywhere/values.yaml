@@ -21,7 +21,7 @@ enabled: false
 #     tag: ""            # empty = the chart appVersion; set it to pin a specific console version
 #     pullPolicy: IfNotPresent
 #   operatorApiAddrs:
-#     - kube-anywhere-api:9090
+#     - kube-anywhere-operator-api:9090
 #   queryHistory:
 #     enabled: true
 #   dependencies:
@@ -36,6 +36,18 @@ enabled: false
 #     prometheus:
 #       enabled: true
 #       endpoint: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+
+# ---------------------------------------------------------------------------------------------
+# Resource names
+# ---------------------------------------------------------------------------------------------
+# The prefix every resource of this chart carries: the StatefulSet, its Services
+# (<nameOverride> and <nameOverride>-headless), the config and admin Secrets
+# (<nameOverride>-config, <nameOverride>-admin), the ServiceAccount, the RBAC objects and the data
+# PVC (data-<nameOverride>-0).
+# Note: the prefix does NOT follow the release name — `helm install foo` and `helm install bar`
+#       render the same resource names. Change it here to run a second console in a namespace
+#       that already has one.
+nameOverride: "kube-anywhere-console"
 
 # ---------------------------------------------------------------------------------------------
 # Image
@@ -53,16 +65,16 @@ imagePullSecrets: []
 # Operator pairing — which PhoenixAI clusters this anywhere serves
 # ---------------------------------------------------------------------------------------------
 # Addresses of ALL operator gRPC API Services this anywhere serves. The operator chart renders
-# that Service (named <its nameOverride>-api) when phoenixAIOperator.enableApiServer is true —
-# both default on, so the default entry below matches a default kube-anywhere install and needs
-# no change. Override it when the operator chart's nameOverride is overridden, or when serving
-# operators in other namespaces:
+# that Service (named <its nameOverride>-operator-api) when phoenixAIOperator.enableApiServer is
+# true — both default on, so the default entry below matches a default kube-anywhere install and
+# needs no change. Override it when the operator chart's nameOverride is overridden, or when
+# serving operators in other namespaces:
 #   operatorApiAddrs:
-#     - "kube-anywhere-api.ns-a:9090"
-#     - "kube-anywhere-api.ns-b:9090"
+#     - "kube-anywhere-operator-api.ns-a:9090"
+#     - "kube-anywhere-operator-api.ns-b:9090"
 # Order matters: it arbitrates ownership conflicts.
 operatorApiAddrs:
-  - "kube-anywhere-api:9090"
+  - "kube-anywhere-operator-api:9090"
 # The namespaces the PhoenixAI clusters live in. Non-empty scopes RBAC down to exactly these
 # namespaces (one Role/RoleBinding each); empty (the default) serves all namespaces and renders
 # a ClusterRole/ClusterRoleBinding, pairing a global-mode operator.
@@ -140,7 +152,7 @@ dependencies:
     # Empty means the canonical starrocks_.
     metricPrefix: ""
     # The cluster-locating label on the metrics. Empty means cluster — what
-    # the kube-phoenixai chart's ServiceMonitor injects
+    # the kube-anywhere chart's ServiceMonitor injects
     # (metrics.serviceMonitor.enabled=true).
     clusterLabel: ""
 
@@ -260,9 +272,12 @@ license:
 #   requests-not-set                      warning   CPU/memory requests missing on a component
 #   tz-env-inconsistent                   info      TZ env differs across components
 #   fe-startup-probe-not-tuned            info      default startup probe window with persisted metadata
-#   termination-grace-period-short        info      BE/CN keep the default 120s grace period
+#   fe-termination-grace-period-short     info      the FE Pod's grace period and fe.conf max_graceful_exit_time_second
+#                                                   do not describe the same graceful-shutdown window
+#   termination-grace-period-short        info      the BE/CN Pod's grace period and the component config's
+#                                                   loop_count_wait_fragments_finish do not describe the same
+#                                                   graceful-shutdown window
 #   topology-spread-missing               info      multi-replica components not spread across domains
-#   serial-pod-management                 info      podManagementPolicy explicitly OrderedReady
 #   query-detail-collect-inconsistent     info      fe.conf query-detail flag vs queryHistory.enabled mismatch
 #   license-invalid                       critical  no valid PhoenixAI Database license is registered on the cluster, or the
 #                                                   longest-valid one expires within license.expiryWarnWindow
@@ -333,7 +348,7 @@ env: []
 # events get/list, pods/log get — scoped by watchNamespaces above): anywhere cannot serve
 # clusters without them, so there is no toggle to render a broken install.
 serviceAccount:
-  # Empty defaults to the chart name (anywhere), matching every other rendered resource.
+  # Empty defaults to the nameOverride prefix, matching every other rendered resource.
   name: ""
   # Optional annotations to add to the serviceaccount manifest (e.g. IAM role bindings).
   annotations: {}

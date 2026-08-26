@@ -232,7 +232,7 @@ subjects:
 apiVersion: v1
 kind: Service
 metadata:
-  name: kube-anywhere-api
+  name: kube-anywhere-operator-api
   namespace: phoenixai
   labels:
     app: kube-anywhere-operator

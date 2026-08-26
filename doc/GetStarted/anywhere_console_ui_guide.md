@@ -150,7 +150,7 @@ which holds a **Theme** selector (Light / Dark / System), **Sign out**, and the 
 
 Cluster Console URLs never name the cluster — the session supplies it. That is why the paths are
 the same for every cluster, and why switching clusters means signing in again. The signed-in
-cluster is shown in the header (`phoenixai/kube-phoenixai` in the screenshots below), beside the
+cluster is shown in the header (`phoenixai/kube-anywhere` in the screenshots below), beside the
 three destinations and the user menu.
 
 Pages that render times take a display timezone from the UI and put it in the URL (`?tz=UTC`), so

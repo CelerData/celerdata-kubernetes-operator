@@ -22,6 +22,9 @@
 # The prefix of the resources created by the phoenixai chart. It is also the default cluster name
 # (phoenixAICluster.name falls back to it), so it prefixes every data-plane resource:
 # StatefulSets, Services and PVCs (e.g. <nameOverride>-fe-*).
+# Note: the prefix does NOT follow the release name — `helm install foo` and `helm install bar`
+#       render the same resource names. A second cluster alongside the first is created by
+#       setting phoenixAICluster.name below, which takes precedence over this value.
 # Note: When upgrading a release that was installed with an older default (kube-phoenixai), keep
 #       that old value here (or set phoenixAICluster.name to the existing cluster name) so the
 #       upgrade keeps the existing StatefulSets and PVCs instead of recreating the data plane.

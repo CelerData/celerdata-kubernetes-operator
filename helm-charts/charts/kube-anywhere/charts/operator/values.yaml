@@ -20,7 +20,10 @@ global:
 timeZone: UTC
 
 # The prefix of the resources created by the operator chart (e.g. the operator Deployment is
-# named <nameOverride>-operator and the gRPC query API Service <nameOverride>-api).
+# named <nameOverride>-operator and the gRPC query API Service <nameOverride>-operator-api).
+# Note: the prefix does NOT follow the release name. `helm install foo` and `helm install bar`
+#       render the same resource names, so a second release in one namespace needs a different
+#       value here.
 # Note: When upgrading a release that was installed with an older default (kube-phoenixai), keep
 #       that old value here so the upgrade keeps the existing resource names.
 nameOverride: "kube-anywhere"
