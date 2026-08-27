@@ -13,18 +13,12 @@ storage from inside the Kubernetes cluster instead of a cloud bucket. That suits
 - a self-contained demo or evaluation, with no cloud account and no bucket to create;
 - an air-gapped installation, where an external S3 endpoint is not reachable at all.
 
-:::note Verified on 2026-08-21
-Run start to finish on a kind cluster with PhoenixAI 4.1.4-ee: MinIO and its bucket, a 3 FE + 1 CN
-cluster started with no storage volume in its configuration file, the storage volume created below,
-a table written and read back through MinIO, warehouse `wh1`, and the console serving against the
-same bucket.
-
-Monitoring was exercised too: all five ServiceMonitor targets scraped, the Grafana dashboard
-populated, and the console's Prometheus dependency check passing every probe — against a cluster
-carrying 446,656 stream-loaded rows and sustained query load, not an idle one.
-
-One part of this page was not exercised: the support-bundle check at the end, which needs a
-signed-in admin.
+:::note New to Kubernetes or Helm?
+This page assumes you can fill in the gaps — it names commands without explaining what a pod, a
+StorageClass or a Helm release is. If that is not you, use
+[Deploy step by step](../Deploy/deploy_step_by_step_howto.md) instead: the same install, in order,
+with a check after every step and nothing assumed. It installs against Amazon S3; come back here for
+the MinIO deltas.
 :::
 
 Everything MinIO changes is object storage configuration. The two differences from the S3 guide are
@@ -40,10 +34,12 @@ worth understanding before you start:
 
 | You need | Notes |
 | --- | --- |
-| `kubectl`, `helm` | Any recent version |
+| `kubectl`, `helm` | Any recent version; Helm 3.8 or newer |
 | A Kubernetes cluster | `kind create cluster` is enough. Measured on this environment: **3.9 GB** of memory and under one CPU core at rest, with 3 coordinators, 2 compute nodes and MinIO running. 8 GB available to Docker leaves comfortable headroom; the chart values cap each coordinator and compute node at 2 GiB, so a cluster under query load can use more |
+| Access to the PhoenixAI image registry | A key file from your PhoenixAI account team, plus the operator, database and console image tags that go with your release — see [Get the images](#get-the-images) |
 | Enterprise PhoenixAI images | The FE and CN images must be the enterprise (`-ee`) builds. With community images the cluster starts but **no warehouse compute pods are ever created, and nothing reports an error** |
 | A MySQL client | To check the cluster and to run SQL |
+| A PhoenixAI Database license | Not needed to install, but the console's health checks report a cluster without one — see [Register the license](#register-the-license) |
 
 Add the chart repository and see what it offers:
 
@@ -56,10 +52,41 @@ helm search repo phoenixai
 Use the chart names and versions that command lists. One chart — `kube-anywhere` — installs the
 operator, a PhoenixAI cluster, and (with `anywhere.enabled=true`) the Anywhere console. It is also
 distributed as a release archive, so if you do not see it in the repository, install it from the
-`.tgz` for your release.
+`.tgz` for your release — ask your account team for `kube-anywhere-<version>.tgz`.
+
+:::caution Do not substitute a chart that merely looks similar
+The repository also carries older charts from the previous product generation, named `celerdata` and
+`kube-celerdata`. They are a different, earlier product — not this one under another name, and not a
+fallback.
+:::
+
+## Get the images
+
+The operator, coordinator (FE), compute-node (CN) and console images are enterprise builds in a
+**private registry**, so Kubernetes needs credentials for it. Without them every pod fails with
+`ImagePullBackOff`.
+
+Ask your PhoenixAI account team for two things:
+
+1. **Access to the registry.** The images live in Google Artifact Registry, and access arrives either
+   as a JSON key file they issue for you, or as a grant on a service account of your own that you
+   then issue a key for. Either way you end up holding one JSON key file.
+2. **The image tags for your release** — one each for the operator, the database (FE and CN) and the
+   console. The chart carries defaults, but a default only resolves once that exact version has been
+   published. A tag the registry does not hold fails with `ImagePullBackOff` **even though your
+   credentials are correct**, and the message says nothing about a missing version.
+
+The pull secret is created in [Create the namespace and the pull secret](#create-the-namespace-and-the-pull-secret),
+once the namespace exists. For the longer version — why Artifact Registry has no user name and
+password, how to use short-lived tokens instead, and how to mirror the images into a registry you
+already run — see
+[Deploy step by step, Step 1](../Deploy/deploy_step_by_step_howto.md#step-1--get-the-images-and-teach-kubernetes-to-pull-them).
 
 For an air-gapped installation, stage **five** images in your internal registry: the FE, CN,
-operator and console images, plus `minio/minio` and `minio/mc`.
+operator and console images, plus `minio/minio` and `minio/mc`. Mirroring is also what removes the
+install's dependence on reaching Artifact Registry at all — create the pull secret for **your**
+registry instead, with whatever user name and password it takes, and point `image.repository` at it
+for the operator, the FE, the CN, the console and any warehouse.
 
 :::tip Loading image archives into kind
 `kind load docker-image` fails on the multi-platform archives the `-ee` images ship as, because it
@@ -213,11 +240,39 @@ kubectl -n minio logs job/minio-mkbucket
 The log ends with the `phoenixai` bucket listed. Expect a few `connection refused` lines first —
 the job retries until MinIO is accepting requests.
 
-## Create the namespace and install Prometheus
+## Create the namespace and the pull secret
 
 ```bash
 kubectl create namespace phoenixai
 ```
+
+Turn the key file from [Get the images](#get-the-images) into a pull secret. For Google Artifact
+Registry two of the three fields are fixed, so only the path to your key file changes:
+
+```bash
+kubectl -n phoenixai create secret docker-registry phoenixai-registry \
+  --docker-server=us-west1-docker.pkg.dev \
+  --docker-username=_json_key \
+  --docker-password="$(cat <path-to-your-key-file>.json)"
+```
+
+- `us-west1-docker.pkg.dev` is the registry host — the part before the first `/` in your image
+  repositories. Use the host your account team gives you.
+- `_json_key` is not a placeholder. It is the literal user name Artifact Registry expects when the
+  password is a service-account key file.
+- The password is the **whole JSON file**, which is what `$(cat …)` passes in.
+
+The secret is per namespace — one in `default` does nothing for pods in `phoenixai` — and the values
+files below reference it **three times**: once for the operator, once for the cluster's components,
+once for the console. A warehouse needs a fourth reference in its own values file. Referencing it in
+only some of them is why an install sometimes pulls half its images and stalls on the rest.
+
+If you mirrored the images into a registry of your own, create the secret for that registry instead
+(`--docker-server`, `--docker-username`, `--docker-password` take a plain user name and password);
+in a kind cluster with the images imported directly and `imagePullPolicy: IfNotPresent`, skip the
+secret and the `imagePullSecrets` lines altogether.
+
+## Install Prometheus
 
 Prometheus is optional, but without it the console's monitoring pages have no data. The
 `kube-prometheus-stack` chart also scrapes kubelet/cAdvisor and kube-state-metrics by default,
@@ -256,6 +311,11 @@ created with SQL in the next step.
 ```yaml
 operator:
   phoenixAIOperator:
+    # (1 of 3) Pull the operator image.
+    imagePullSecrets:
+      - name: phoenixai-registry
+    image:
+      tag: "<operator-image-tag>"
     enableApiServer: true
     watchNamespace: "phoenixai"
 
@@ -269,6 +329,11 @@ phoenixai:
     name: kube-anywhere
     enabledCn: true
     waitForFullRollout: true
+    componentValues:
+      # (2 of 3) Pull the FE and CN images. Set here, this covers both; the FE
+      # proxy below is public nginx and needs no secret.
+      imagePullSecrets:
+        - name: phoenixai-registry
 
   phoenixAIFeSpec:
     replicas: 3
@@ -342,9 +407,12 @@ phoenixai:
 anywhere:
   # The console is opt-in because it needs object storage of its own.
   enabled: true
+  # (3 of 3) Pull the console image.
+  imagePullSecrets:
+    - name: phoenixai-registry
   image:
     repository: <your-registry>/anywhere
-    tag: <version>
+    tag: <console-image-tag>
 
   # The operator's gRPC API Service, in this namespace.
   operatorApiAddrs:
@@ -381,6 +449,30 @@ rather than surfacing later when someone requests a support bundle.
 :::note Keep FE logs as files
 Do not set `LOG_CONSOLE=1` on the FE. The console's audit-log search and the support bundle's log
 collection both read log **files** from the log volume; console-only logging leaves both empty.
+:::
+
+:::caution The root password can only be set on the first install
+This quick start leaves `root` with no password, which is why every SQL command below passes
+`-uroot` with nothing after it. That is fine on a laptop and wrong anywhere else — and a later
+`helm upgrade` **cannot** set it, so a cluster installed without it keeps an open `root` account
+until someone changes it by hand.
+
+To set one now, create a Secret before installing and point the chart at it:
+
+```bash
+kubectl -n phoenixai create secret generic phoenixai-root-password \
+  --from-literal=password='<root-password>'
+```
+
+```yaml
+phoenixai:
+  initPassword:
+    enabled: true
+    passwordSecret: phoenixai-root-password
+```
+
+Then add `-p'<root-password>'` to the `mysql` commands below and put the password after the colon in
+`-u root:`. See [Initialize Root Password When First Deploy](../Configure/initialize_root_password_howto.md).
 :::
 
 ## Create the storage volume
@@ -424,10 +516,52 @@ kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
   mysql -h127.0.0.1 -P9030 -uroot -e "SHOW BACKENDS\G SHOW WAREHOUSES\G"
 ```
 
+## Register the license
+
+A cluster runs without a license, but the console's health checks report it as unlicensed — so do
+this before reading a red result as a fault.
+
+The license API is served by the **leader** coordinator, so find it first:
+
+```bash
+kubectl -n phoenixai exec kube-anywhere-fe-0 -- \
+  mysql -h127.0.0.1 -P9030 -uroot -e "SHOW FRONTENDS\G" | grep -E 'Name|Role'
+```
+
+The `Name` on the `LEADER` row begins with the pod name. Forward that pod's HTTP port, and leave it
+running:
+
+```bash
+kubectl -n phoenixai port-forward pod/kube-anywhere-fe-<leader> 8030:8030
+```
+
+Then, in a second terminal — send the system information to PhoenixAI Support, and register the
+`license.txt` they return:
+
+```bash
+# system information to send to Support
+curl -u root: localhost:8030/api/v1/license/system_info
+
+# after Support returns license.txt
+curl -u root: -XPOST --location-trusted --data-binary @license.txt \
+  localhost:8030/api/v1/license/register
+
+# confirm
+curl -u root: localhost:8030/api/v1/license/list
+```
+
+`-u root:` ends in a colon because no root password was set; if you set one, it goes after the
+colon. The user needs the `cluster_admin` role, which `root` has. Full detail, including the shape
+of each response, is in [License Your PhoenixAI Cluster](../Deploy/license_cluster_howto.md).
+
+In an air-gapped installation this is the one step that needs a way to move two small files in and
+out — the system information string, and `license.txt`.
+
 ## Install a warehouse
 
 As in the S3 guide, plus one addition: **a warehouse runs its own compute nodes**, and they reach
-object storage independently of the cluster's. They need the same environment variable.
+object storage independently of the cluster's. They need the same environment variable — and, since
+they pull the CN image themselves, the fourth reference to the pull secret.
 
 ```yaml
 # warehouse-values.yaml
@@ -439,6 +573,9 @@ metrics:
 spec:
   phoenixAIClusterName: "kube-anywhere"
   replicas: 1
+  # (4th reference) Pull the CN image for this warehouse's own compute nodes.
+  imagePullSecrets:
+    - name: phoenixai-registry
   image:
     repository: <your-registry>/cn-ubuntu
     tag: 4.1.4-ee
@@ -639,6 +776,18 @@ kubectl -n phoenixai get secret kube-anywhere-console-admin \
 Add, remove or rotate accounts by editing that Secret; changes take effect within about a minute
 and need no restart.
 
+:::caution Replace a short, guessable password before anyone else can reach the console
+A long random string was generated for your installation alone. If the command printed something
+short — `admin`, for instance — your chart version installed a **well-known default**, and anyone
+who can reach the console can sign in as an administrator. Replace it before you put an Ingress or
+a load balancer in front of the console:
+
+```bash
+kubectl -n phoenixai patch secret kube-anywhere-console-admin \
+  --type merge -p "{\"stringData\":{\"admin\":\"$(openssl rand -base64 24)\"}}"
+```
+:::
+
 To reach the **Cluster Console** — the per-cluster view, with the data catalog, query insights and
 system monitoring — go to `http://localhost:8090/cluster-console/login` and sign in with a database
 user from the cluster itself. That is a PhoenixAI database user, created in the cluster with SQL,
@@ -681,6 +830,15 @@ afterwards.
 The page names both in its empty state, so you do not have to remember which is missing.
 
 ## Troubleshooting
+
+**Pods stay in `ImagePullBackOff` or `ErrImagePull`.** In order of likelihood: there is no pull
+secret in this namespace; the secret is in a different one
+(`kubectl get secret --all-namespaces | grep phoenixai-registry`); the name in the values file does
+not match; it was named in only some of the three places, which is why this often affects part of
+the install and not the rest; the tag names a version the registry does not hold; or the credentials
+are expired. On kind, it can also mean `kind load` reported success while importing nothing — see
+the tip under [Get the images](#get-the-images). `kubectl -n phoenixai describe pod <pod> | tail -20`
+prints the registry's own refusal, which separates "no credentials" from "credentials rejected".
 
 **The FE cannot reach storage, or table creation fails with an S3 error.** Check that
 `aws.s3.enable_path_style_access` is `true` on the storage volume (`DESC STORAGE VOLUME`). Without
