@@ -211,7 +211,7 @@ Prefix each with `anywhere.` when installing through the parent `kube-anywhere` 
 | `image.repository` / `.tag` | the released console image, tag = chart appVersion | container image |
 | `operatorApiAddrs` | `["kube-anywhere-operator-api:9090"]` | ALL operator gRPC API Service addresses this anywhere serves — one entry per operator; order arbitrates ownership conflicts |
 | `watchNamespaces` | `[]` (all namespaces, cluster-scoped RBAC) | the namespaces the PhoenixAI clusters live in when pairing namespaced-mode operators; one Role/RoleBinding each |
-| `admin.users` / `admin.existingSecret` | `{}` / `""` (random single `admin` account) | Admin Console accounts — see the comments in `values.yaml` for the three sources and the GitOps caveat |
+| `admin.users` / `admin.existingSecret` | `{admin: admin}` / `""` | Admin Console accounts. The chart ships a default **admin / admin** account, which a reachable install must replace; clear `users` to have a random password generated instead. See the comments in `values.yaml` for the three sources and the GitOps caveat |
 | `httpPort` | `8090` | HTTP listen/Service port |
 | `logLevel` | `info` | debug/info/warn/error |
 | `dependencies.s3.bucket` / `.region` / `.accessKey` / `.secretKey` / ... | `""` (required) | object storage for large artifacts — the chart refuses to render until this is configured, see [External dependencies](#external-dependencies-s3--prometheus) |

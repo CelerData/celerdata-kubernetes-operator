@@ -269,6 +269,8 @@ spec:
     - name: {{ .Values.phoenixAIFeSpec.storageSpec.name }}{{ template "phoenixaicluster.fe.log.suffix" . }}
       {{- if .Values.phoenixAIFeSpec.storageSpec.logStorageClassName }}
       storageClassName: {{ .Values.phoenixAIFeSpec.storageSpec.logStorageClassName }}
+      {{- else if .Values.phoenixAIFeSpec.storageSpec.storageClassName }}
+      storageClassName: {{ .Values.phoenixAIFeSpec.storageSpec.storageClassName }}
       {{- end }}
       storageSize: "{{ .Values.phoenixAIFeSpec.storageSpec.logStorageSize }}"
       mountPath: {{ template "phoenixaicluster.fe.log.path" . }}
@@ -587,12 +589,16 @@ spec:
     - name: {{ .Values.phoenixAICnSpec.storageSpec.name }}{{template "phoenixaicluster.cn.log.suffix" . }}
       {{- if .Values.phoenixAICnSpec.storageSpec.logStorageClassName }}
       storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.logStorageClassName }}
+      {{- else if .Values.phoenixAICnSpec.storageSpec.storageClassName }}
+      storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.storageClassName }}
       {{- end }}
       storageSize: "{{ .Values.phoenixAICnSpec.storageSpec.logStorageSize }}"
       mountPath: {{template "phoenixaicluster.cn.log.path" . }}
     - name: {{ .Values.phoenixAICnSpec.storageSpec.name }}{{template "phoenixaicluster.cn.spill.suffix" . }}
       {{- if .Values.phoenixAICnSpec.storageSpec.spillStorageClassName }}
       storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.spillStorageClassName }}
+      {{- else if .Values.phoenixAICnSpec.storageSpec.storageClassName }}
+      storageClassName: {{ .Values.phoenixAICnSpec.storageSpec.storageClassName }}
       {{- end }}
       storageSize: "{{ .Values.phoenixAICnSpec.storageSpec.spillStorageSize}}"
       mountPath: {{template "phoenixaicluster.cn.spill.path" . }}

@@ -208,7 +208,7 @@ phoenixai:
         port: 8080
 EOF
 
-  cmd="helm install -n phoenixai phoenixai $HELM_CHART_URL --create-namespace --timeout 60s"
+  cmd="helm install -n phoenixai kube-anywhere $HELM_CHART_URL --create-namespace --timeout 60s"
   eval "$cmd -f /tmp/local-install-values.yaml" 1>/dev/null
 }
 

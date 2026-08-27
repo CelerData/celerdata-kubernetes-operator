@@ -1,0 +1,843 @@
+---
+title: Deploy PhoenixAI and the Anywhere console
+sidebar_label: Deploy step by step
+sidebar_position: 1
+description: A complete, ordered install of the operator, a shared-data PhoenixAI cluster and the PhoenixAI Anywhere console with the kube-anywhere Helm chart — written so that no prior Kubernetes or Helm experience is assumed.
+---
+
+# Deploy PhoenixAI and the Anywhere console
+
+This page walks through one complete installation, in order, with a check after every step. It
+assumes you have **never used Helm** and know only that Kubernetes is "the thing our cluster runs
+on". Every command can be copied as-is once you have filled in the values file in
+[Step 3](#step-3--set-the-root-password-and-write-your-values-file).
+
+**What you have at the end**
+
+- a PhoenixAI cluster in elastic (shared-data) mode — 3 coordinators and 1 compute node — storing
+  its data in your object-storage bucket;
+- the PhoenixAI operator, which keeps that cluster running;
+- the **PhoenixAI Anywhere console** in your browser, already showing that cluster.
+
+**How long it takes.** About 45 minutes of reading and typing the first time, of which roughly 10
+minutes is waiting for pods to start. Most of the elapsed time goes into Step 0 and Step 1 —
+collecting credentials from other people. Nothing here is undone by repeating it: a corrected
+values file is re-applied with the same command (`helm upgrade --install`).
+
+:::note Already comfortable with Kubernetes?
+If you want the fastest possible end-to-end install on a laptop instead, use
+[Quick start with Amazon S3](../QuickStart/quickstart_s3.md) or
+[Quick start with MinIO](../QuickStart/quickstart_minio.md). They cover the same ground in fewer
+words and assume you can fill in the gaps.
+:::
+
+## The five things you must have before you start
+
+Collect these first. Four of the five come from other people, so requesting them early is what
+decides whether this takes an afternoon or a week.
+
+| # | What | Who gives it to you |
+| --- | --- | --- |
+| 1 | A Kubernetes cluster you can reach with `kubectl`, and permission to create objects in it | your platform / Kubernetes administrator |
+| 2 | The name of a **StorageClass** that works in that cluster | the same administrator — Step 0 shows how to check it yourself |
+| 3 | **A key file for the PhoenixAI container image registry** | your PhoenixAI account team. This is the single most common reason a first install fails |
+| 4 | An **S3-compatible bucket**, its region, and an access key / secret key that can read and write it | your cloud or storage administrator |
+| 5 | `kubectl` and `helm` installed on your own machine | you |
+
+## What you are installing
+
+Four pieces, installed by **one** command. It is worth 60 seconds to get the picture straight,
+because these names show up in every later step.
+
+| Piece | What it does |
+| --- | --- |
+| **PhoenixAI operator** | A small program that runs inside Kubernetes and builds, repairs and scales PhoenixAI clusters for you. You never talk to it directly. |
+| **PhoenixAI cluster** | The database itself: **coordinators** (FE — accept SQL, plan queries, hold metadata) and **compute nodes** (CN — do the work). In elastic mode the table data lives in your bucket, not on the nodes. |
+| **PhoenixAI Anywhere console** | The web UI: cluster inventory, health checks, monitoring, license and usage, support bundles, plus a per-cluster view for the people who write queries. |
+| **Warehouse** *(optional, later)* | An extra, separately scalable group of compute nodes. Not part of this page — see [Deploy a Warehouse](./deploy_warehouse_howto.md). |
+
+And the four words from Helm and Kubernetes that this page uses:
+
+| Word | Meaning here |
+| --- | --- |
+| **namespace** | A folder inside the Kubernetes cluster that keeps one installation's objects together. This page uses `phoenixai`. |
+| **pod** | One running container (or a small group of them). A coordinator is a pod; the console is a pod. |
+| **StorageClass** | The cluster's recipe for handing out disks. Coordinators, compute nodes and the console each ask for one. If the recipe does not work, pods sit in `Pending` forever, so Step 0 has you pick a working one. |
+| **chart / values file / release** | A **chart** is a package (`kube-anywhere` is ours). A **values file** is your settings for it — one YAML file you keep and reuse. A **release** is one installation of a chart, under a name you pick. |
+
+:::caution Object names do not follow your release name
+The objects created below are called `kube-anywhere-fe-0`, `kube-anywhere-console`, and so on, no
+matter what you name the release. The prefix comes from the chart, not from your `helm install`
+command. [Step 4](#step-4--install) has a table of every name, so you can always find things.
+:::
+
+## Step 0 — Check your environment
+
+Five things to confirm before you start. Each takes seconds, and each one corresponds to a way the
+install fails later with a message that does not name the real cause.
+
+**1. `kubectl` reaches the cluster, and the nodes are healthy.**
+
+```bash
+kubectl get nodes
+```
+
+Every node should say `Ready`. On a cluster that was just created, a node can report `NotReady` for
+the first minute while its networking starts — re-run the command until it turns `Ready` rather than
+reading it as a fault. If the command fails outright instead of printing nodes, your `kubectl` is not
+configured for the cluster yet — that is your administrator's side, not this page's.
+
+**2. Helm is installed and recent enough.**
+
+```bash
+helm version
+```
+
+Helm 3.8 or newer. If the command is not found, install Helm from
+[helm.sh](https://helm.sh/docs/intro/quickstart/).
+
+**3. Your `kubectl` has enough permission.**
+
+Installing creates a namespace, custom resource definitions, StatefulSets, Deployments, Services,
+Secrets, ConfigMaps, PersistentVolumeClaims, a ServiceAccount and its roles. A cluster administrator
+already has all of it. If you are working with a restricted account, hand your administrator
+[Least privilege to deploy](../GetStarted/least_permission_to_deploy_phoenixai_howto.md), which lists
+exactly what to grant.
+
+**4. Pick the StorageClass to use.**
+
+```bash
+kubectl get storageclass
+```
+
+Note the name — it goes into the values file as `<storage-class>`. A class marked `(default)` is the
+one Kubernetes uses when nothing asks for a class by name, but this page always names it explicitly,
+because an empty setting is *rejected* by PhoenixAI's configuration schema rather than silently
+defaulted.
+
+If the list is empty, stop here: no PhoenixAI pod can start, and the failure will show up later as
+pods stuck in `Pending`. Your administrator has to install a storage driver first — on managed
+Kubernetes this is usually a one-click add-on.
+
+**5. The cluster has room.** The values file in Step 3 requests roughly **2.5 CPU cores and 9 GiB
+of memory** in total, and allows bursting to about **9 cores and 18 GiB**:
+
+| Pods | Requests each | Limits each |
+| --- | --- | --- |
+| 3 coordinators | 500m CPU / 2 GiB | 2 CPU / 4 GiB |
+| 1 compute node | 500m CPU / 2 GiB | 2 CPU / 4 GiB |
+| 1 operator | chart default | chart default |
+| 1 console | chart default | chart default |
+
+One large node is enough to start: this shape came up on a single 8-core / 32 GiB node with room to
+spare. Two or three worker nodes are still the better arrangement, because the three coordinators can
+then sit on different nodes and survive one of them failing. Requests that no node can satisfy appear
+as pods in `Pending` with an `Insufficient cpu` or `Insufficient memory` event.
+
+## Step 1 — Get the images, and teach Kubernetes to pull them
+
+The operator, coordinator, compute-node and console images are **enterprise builds in a private
+registry**. Kubernetes therefore needs credentials, stored as a Kubernetes *secret*. Without them
+every pod fails with `ImagePullBackOff` — the most common first-install failure of all.
+
+**1. Request access.** Ask your PhoenixAI account team for access to the PhoenixAI container image
+registry, and for the image versions that match your release. The images live in **Google Artifact
+Registry**, and access reaches you in one of two shapes. Ask which one you are getting — the answer
+decides whether you touch Google Cloud at all.
+
+**Shape A — they send you a key file.** The account that may read the registry belongs to PhoenixAI,
+so only PhoenixAI can issue a key for it. You receive one JSON file and there is nothing for you to
+do in Google Cloud. Save it somewhere your install machine can read, keep it out of version control,
+and go to substep 2.
+
+**Shape B — they grant an account of yours.** Use this when your organization would rather hold its
+own credential. It needs a Google Cloud project of your own, and permission in that project to
+create service-account keys (the Service Account Key Admin role). Create the account, send its
+address to your account team, and issue the key yourself once they confirm the grant:
+
+```bash
+# 1. create a service account in YOUR project
+gcloud iam service-accounts create phoenixai-puller \
+  --project=<your-gcp-project> \
+  --display-name="Pulls PhoenixAI images"
+
+# 2. send this address to your PhoenixAI account team and wait for them to
+#    confirm they granted it read access to the registry
+echo "phoenixai-puller@<your-gcp-project>.iam.gserviceaccount.com"
+
+# 3. issue the key file
+gcloud iam service-accounts keys create phoenixai-puller.json \
+  --iam-account=phoenixai-puller@<your-gcp-project>.iam.gserviceaccount.com
+```
+
+The read permission itself (Artifact Registry Reader, on PhoenixAI's registry) is granted on the
+PhoenixAI side — you cannot grant it to yourself, which is why step 2 above is a wait.
+
+Either way, what you hold at the end is one JSON key file, and the rest of this page is identical.
+
+**2. Create the namespace:**
+
+```bash
+kubectl create namespace phoenixai
+```
+
+**3. Create the secret.** For Google Artifact Registry two of the three fields are fixed, so only the
+path to your key file changes:
+
+```bash
+kubectl -n phoenixai create secret docker-registry phoenixai-registry \
+  --docker-server=us-west1-docker.pkg.dev \
+  --docker-username=_json_key \
+  --docker-password="$(cat <path-to-your-key-file>.json)"
+```
+
+- `us-west1-docker.pkg.dev` is the registry host — the part before the first `/` in the
+  `image.repository` values this chart ships. If your account team points you at a different region,
+  use the host they give you.
+- `_json_key` is **not** a placeholder. It is the literal user name Google Artifact Registry expects
+  when the password is the contents of a service-account key file. Type it exactly.
+- The password is the **whole JSON file**, which is what `$(cat ...)` passes in — not a field from
+  inside it.
+
+**4. Confirm it exists:**
+
+```bash
+kubectl -n phoenixai get secret phoenixai-registry
+```
+
+:::caution Two things people get wrong here
+**The secret is per namespace.** It must live in the same namespace as the install. A secret in
+`default` does nothing for pods in `phoenixai`.
+
+**You must reference it in three places** in the values file — once for the operator, once for the
+cluster's components, once for the console. They are separate components with separate settings, so
+naming it once is not enough. Step 3 marks all three. A warehouse, added later, needs a fourth
+reference in its own values file.
+:::
+
+:::note The credentials have to keep working, not just work once
+The operator's image is re-fetched every time its pod starts, so an expired or deleted secret
+breaks a restart weeks after a successful install. Rotate the secret in place — `kubectl -n
+phoenixai delete secret phoenixai-registry` followed by the same `create secret` command — rather
+than letting it lapse.
+:::
+
+### Why a key file, and not a user name and password
+
+Google Artifact Registry has **no user name and password credential of its own**. It accepts exactly
+four things, and only one of them suits a long-running Kubernetes cluster:
+
+| What Google accepts | Docker user name | Password | Usable here? |
+| --- | --- | --- | --- |
+| Service-account key file | `_json_key` | the whole JSON file | **Yes** — what this page uses |
+| The same file, base64-encoded | `_json_key_base64` | that base64 text | Yes, if that is the form you were given |
+| Short-lived access token | `oauth2accesstoken` | `gcloud auth print-access-token` output | Only with automation — it expires after 60 minutes |
+| gcloud credential helpers | — | — | No — they authenticate `docker` on a workstation; Kubernetes reads a Secret, not your gcloud session |
+
+So the fixed strings above are not our convention, they are Google's: `_json_key` is what tells
+Artifact Registry that the password is a key file.
+
+If your security policy forbids long-lived keys, there are two ways out:
+
+- **Short-lived tokens.** Same command with `--docker-username=oauth2accesstoken` and
+  `--docker-password="$(gcloud auth print-access-token)"`. The token dies after an hour, so something
+  has to recreate the Secret on a schedule — reasonable if you already run such automation, painful
+  otherwise, and a pod that restarts after the token expired cannot pull.
+- **Mirror the images into a registry you already run** — what most organizations with a strict policy
+  end up doing. Pull the four images once, push them to your own registry, then in your values file
+  override `image.repository` for the operator, the cluster components and the console, and create the
+  pull secret for **your** registry instead. That registry may well accept a plain user name and
+  password, in which case `create secret docker-registry` takes exactly that:
+
+  ```bash
+  kubectl -n phoenixai create secret docker-registry phoenixai-registry \
+    --docker-server='<your-registry-host>' \
+    --docker-username='<user-name>' \
+    --docker-password='<password>'
+  ```
+
+  Mirroring also removes the install's dependency on reaching the internet, which matters in a
+  restricted network.
+
+## Step 2 — Get the chart
+
+The chart reaches you one of two ways, and the next step is the same either way. Look first:
+
+```bash
+helm repo add phoenixai https://celerdata.github.io/phoenixai-kubernetes-operator
+helm repo update phoenixai
+helm search repo phoenixai
+```
+
+**If the list includes `phoenixai/kube-anywhere`**, you are done with this step — use the version that
+command prints, and install from the repository in Step 4.
+
+**If it does not**, your release has not been published to that repository yet, and your account team
+gives you the chart as a package file (`kube-anywhere-<version>.tgz`) instead. Save it next to your
+values file; Step 4 shows the one line that differs.
+
+:::caution Do not substitute a chart that merely looks similar
+The repository also carries older charts from the previous product generation, with names like
+`celerdata` and `kube-celerdata`. They are a different, earlier product — not this one under another
+name, and not a fallback. If `kube-anywhere` is absent, ask your account team for the package file;
+do not install `kube-celerdata` instead.
+:::
+
+## Step 3 — Set the root password, and write your values file
+
+**First, decide the database root password.** PhoenixAI's `root` user starts with **no password**,
+and the chart can set one for you — but only during this first install. A later `helm upgrade`
+cannot, so a cluster installed without it keeps an open `root` account until someone changes it by
+hand.
+
+Put the password in a Secret rather than in your values file, so it stays out of the file and out of
+what `helm get values` prints:
+
+```bash
+kubectl -n phoenixai create secret generic phoenixai-root-password \
+  --from-literal=password='<root-password>'
+```
+
+The values file below then points at that Secret. (Plaintext in the values file also works — see
+[Initialize Root Password When First Deploy](../Configure/initialize_root_password_howto.md) for
+both forms.)
+
+**Then write the values file.** This is the only file you author, and the only step that needs
+thought. Save it as `my-values.yaml`, keep it — you will reuse it for every upgrade — and treat it as
+sensitive, since it holds your storage keys.
+
+Replace every `<...>` placeholder; the table after the file says where each one comes from.
+
+```yaml
+# my-values.yaml
+
+# ----------------------------------------------------------------------------
+# The operator
+# ----------------------------------------------------------------------------
+operator:
+  phoenixAIOperator:
+    # (1 of 3) Pull the operator image.
+    imagePullSecrets:
+      - name: phoenixai-registry
+    # The version your account team named. See the note under this file.
+    image:
+      tag: "<operator-image-tag>"
+    # The console reads everything through this API. Leave it on, or the console
+    # installs successfully and then shows no clusters at all.
+    enableApiServer: true
+    # Manage only this namespace. Also keeps the install's permissions
+    # namespace-scoped instead of cluster-wide.
+    watchNamespace: "phoenixai"
+
+# ----------------------------------------------------------------------------
+# The PhoenixAI cluster
+# ----------------------------------------------------------------------------
+phoenixai:
+  # Set the database root password from the Secret created above. This works on
+  # a first install only — a later helm upgrade cannot set it, so leaving it off
+  # now means the cluster keeps an open root account.
+  initPassword:
+    enabled: true
+    passwordSecret: phoenixai-root-password
+
+  phoenixAICluster:
+    enabledCn: true
+    # Report the release as ready only once the cluster has fully rolled out.
+    waitForFullRollout: true
+    componentValues:
+      # (2 of 3) Pull the coordinator and compute-node images.
+      imagePullSecrets:
+        - name: phoenixai-registry
+      # The database version your account team named. Setting it here covers
+      # both coordinators and compute nodes. If you ever set an `image` block
+      # inside phoenixAIFeSpec or phoenixAICnSpec instead, give repository and
+      # tag together there: a component's own image block replaces this one
+      # wholesale rather than merging into it.
+      image:
+        tag: "<database-image-tag>"
+
+  # Coordinators (FE)
+  phoenixAIFeSpec:
+    replicas: 3
+    resources:
+      requests: { cpu: 500m, memory: 2Gi }
+      limits: { cpu: 2, memory: 4Gi }
+    storageSpec:
+      name: fe-storage
+      # Always name a class explicitly. An empty value is rejected by the
+      # configuration schema, not defaulted.
+      storageClassName: "<storage-class>"
+      storageSize: 20Gi
+      logStorageSize: 5Gi
+    config: |
+      LOG_DIR = ${STARROCKS_HOME}/log
+      JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true -Xmx3072m -XX:+UseG1GC"
+      http_port = 8030
+      rpc_port = 9020
+      query_port = 9030
+      edit_log_port = 9010
+      # ---- These lines are what make it an elastic (shared-data) cluster. ----
+      # The Anywhere console operates elastic clusters only, and the mode cannot
+      # be changed after the cluster is created. Do not remove them.
+      run_mode = shared_data
+      cloud_native_meta_port = 6090
+      cloud_native_storage_type = S3
+      enable_load_volume_from_conf = true
+      aws_s3_path = <bucket>/data
+      aws_s3_region = <region>
+      aws_s3_endpoint = s3.<region>.amazonaws.com
+      aws_s3_access_key = <access-key>
+      aws_s3_secret_key = <secret-key>
+      aws_s3_use_aws_sdk_default_behavior = false
+
+  # Compute nodes (CN)
+  phoenixAICnSpec:
+    replicas: 1
+    resources:
+      requests: { cpu: 500m, memory: 2Gi }
+      limits: { cpu: 2, memory: 4Gi }
+    storageSpec:
+      name: cn-storage
+      storageClassName: "<storage-class>"
+      storageSize: 20Gi
+      logStorageSize: 5Gi
+    config: |
+      sys_log_level = INFO
+      thrift_port = 9060
+      webserver_port = 8040
+      heartbeat_service_port = 9050
+      brpc_port = 8060
+      datacache_enable = true
+      datacache_mem_size = 5%
+      # Must be greater than zero in elastic mode, or CREATE TABLE fails with
+      # "no valid cache space".
+      datacache_disk_size = 4294967296
+
+# ----------------------------------------------------------------------------
+# The Anywhere console
+# ----------------------------------------------------------------------------
+anywhere:
+  # The console is off by default, because it needs object storage of its own.
+  enabled: true
+  # (3 of 3) Pull the console image.
+  imagePullSecrets:
+    - name: phoenixai-registry
+  # The console version your account team named.
+  image:
+    tag: "<console-image-tag>"
+
+  # Where the operator's API lives. This default matches the install above; it
+  # needs changing only if you renamed the operator's resources.
+  operatorApiAddrs:
+    - "kube-anywhere-operator-api:9090"
+  # The namespaces holding the clusters this console serves. Must include the
+  # namespace above; also keeps the console's permissions namespace-scoped.
+  watchNamespaces:
+    - "phoenixai"
+
+  persistence:
+    storageClass: "<storage-class>"
+    size: 10Gi
+
+  dependencies:
+    # The console keeps large artifacts — query profiles and support bundles —
+    # in object storage. It verifies this at startup with a write, a read and a
+    # delete, so a wrong value here stops the console from starting instead of
+    # failing quietly much later.
+    s3:
+      bucket: "<bucket>"
+      # A key prefix of its own, so one bucket can hold both the cluster's data
+      # (under data/ above) and the console's artifacts.
+      path: "anywhere"
+      region: "<region>"
+      endpoint: "https://s3.<region>.amazonaws.com"
+      accessKey: "<access-key>"
+      secretKey: "<secret-key>"
+      # Leave false for Amazon S3. Self-hosted S3-compatible storage such as
+      # MinIO usually needs true.
+      usePathStyle: false
+```
+
+| Placeholder | Where it comes from |
+| --- | --- |
+| `<storage-class>` | `kubectl get storageclass`, in Step 0 |
+| `<bucket>`, `<region>` | your bucket. The same bucket serves the cluster (`data/`) and the console (`anywhere/`); nothing else in it is touched |
+| `<access-key>`, `<secret-key>` | a key pair that can **read and write** that bucket |
+| `<operator-image-tag>`, `<database-image-tag>`, `<console-image-tag>` | the three versions your account team named — see the note below |
+| `phoenixai-registry` | the secret from Step 1. If you named it differently, change all three references |
+| `phoenixai-root-password` | the Secret created at the start of this step |
+
+:::caution Ask for the three image tags, and set them
+The chart carries a default tag for each component, but a default only resolves once that exact
+version has been published to the registry. Ask your account team for the operator, database and
+console versions that go with your release, and write all three into the file. If a tag names an
+image the registry does not hold, the pod fails with `ImagePullBackOff` **even though your
+credentials are correct** — and the message says nothing about a missing version, so it is easy to
+spend an hour re-checking the pull secret instead.
+
+Naming the versions you were given is also what makes the install reproducible: the same values file
+brings up the same cluster next month.
+:::
+
+:::caution Elastic mode is decided now, not later
+`run_mode = shared_data` and the `aws_s3_*` lines under it are what create an elastic cluster. A
+cluster created without them is a **classic** cluster: the console will list it, but every console
+feature refuses to operate on it, and the mode cannot be switched afterwards — the cluster has to be
+recreated. If you change nothing else in this file, keep that block.
+:::
+
+Monitoring pages need a Prometheus to query, which this page leaves out to keep the path short. See
+[Deploy Prometheus and Grafana](../Monitor/deploy-prometheus-grafana.md) and
+[Anywhere Console monitoring](../Monitor/anywhere-monitoring.md) when you want them.
+
+## Step 4 — Install
+
+From the chart repository:
+
+```bash
+helm upgrade --install kube-anywhere phoenixai/kube-anywhere \
+  --namespace phoenixai -f my-values.yaml
+```
+
+Or, if Step 2 left you with a package file, point at the file instead — nothing else changes:
+
+```bash
+helm upgrade --install kube-anywhere ./kube-anywhere-<version>.tgz \
+  --namespace phoenixai -f my-values.yaml
+```
+
+`upgrade --install` is deliberate: the same command installs the first time and applies every later
+change, so there is only one command to remember.
+
+Watch the pods appear:
+
+```bash
+kubectl -n phoenixai get pods -w
+```
+
+Expect the operator, the console and a short-lived password job within seconds, then the coordinators
+one at a time (`kube-anywhere-fe-0`, `-1`, `-2`), then the compute node once a coordinator can accept
+it. Measured on an idle single-node cluster pulling the database images over the network for the first
+time: everything settled in **five minutes**, of which about 20 seconds was the image download. Press
+`Ctrl+C` to stop watching. The finished state:
+
+```text
+NAME                                      READY   STATUS      RESTARTS        AGE
+kube-anywhere-cn-0                        1/1     Running     0               2m41s
+kube-anywhere-console-0                   1/1     Running     0               4m55s
+kube-anywhere-fe-0                        1/1     Running     0               4m53s
+kube-anywhere-fe-1                        1/1     Running     0               3m43s
+kube-anywhere-fe-2                        1/1     Running     0               2m54s
+kube-anywhere-initpwd-gr8n6               0/1     Completed   4 (3m53s ago)   4m55s
+kube-anywhere-operator-6d554cb5b9-8c648   1/1     Running     0               4m55s
+```
+
+:::note `kube-anywhere-initpwd-...` looks broken before it succeeds
+That pod is the one-off job that sets the root password from Step 3. It starts immediately, while the
+coordinators are still booting, so its first attempts cannot connect and it shows `Error` with a
+climbing restart count for a minute or two. That is the retry working, not a failure. It ends as
+`Completed` — the run above took four attempts — and `kubectl -n phoenixai get job` then reports
+`Complete 1/1`. A pod stuck in `Error` long after the coordinators are `Running` is worth reading:
+`kubectl -n phoenixai logs job/kube-anywhere-initpwd`.
+:::
+
+Anything not `Running` after a few minutes has a reason worth reading rather than waiting out:
+
+```bash
+kubectl -n phoenixai get pods
+kubectl -n phoenixai describe pod <pod-name> | tail -25
+```
+
+Take the `Events` at the bottom to [Troubleshooting](#troubleshooting).
+
+Here is what everything is called — remember that the names come from the chart, not from your
+release name:
+
+| What | Kubernetes object |
+| --- | --- |
+| operator | Deployment `kube-anywhere-operator` |
+| the API the console reads | Service `kube-anywhere-operator-api` |
+| the cluster, as one object | `phoenixaicluster/kube-anywhere` |
+| coordinators | pods `kube-anywhere-fe-0` … `-2` |
+| compute node | pod `kube-anywhere-cn-0` |
+| console | pod `kube-anywhere-console-0`, Service `kube-anywhere-console` |
+| console sign-in accounts | Secret `kube-anywhere-console-admin` |
+| the console's own disk | PersistentVolumeClaim `data-kube-anywhere-console-0` |
+
+## Step 5 — Check the cluster is really up
+
+Ask the operator for its own summary:
+
+```bash
+kubectl -n phoenixai get phoenixaicluster
+```
+
+```text
+NAME            PHASE     FESTATUS   CNSTATUS   FEPROXYSTATUS
+kube-anywhere   running   running    running
+```
+
+`FEPROXYSTATUS` stays empty — the optional FE proxy is not part of this install.
+
+Then ask the database itself. This runs a MySQL client inside a coordinator, so you need nothing
+installed locally. Use the root password you set in Step 3 — the password follows `-p` with no
+space between them:
+
+```bash
+kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
+  mysql -h127.0.0.1 -P9030 -uroot -p'<root-password>' -e "SHOW FRONTENDS\G SHOW COMPUTE NODES\G SHOW WAREHOUSES\G"
+```
+
+Three things to confirm:
+
+- `SHOW FRONTENDS` lists three rows with `Alive: true`;
+- `SHOW COMPUTE NODES` lists your compute node with `Alive: true`;
+- `SHOW WAREHOUSES` lists `default_warehouse`. **This is also your proof that the cluster is
+  elastic**, because warehouses exist only in elastic mode. If the statement errors instead, the
+  `run_mode` block did not take effect — see
+  [the console lists the cluster but every page says it is not supported](#the-console-lists-the-cluster-but-every-page-says-it-is-not-supported).
+
+:::note Why that command also works if you forget the password
+A connection made *inside* a coordinator's container over `127.0.0.1` is exempt from the root
+password — `SELECT user()` there reports `'root'@'127.0.0.1'`. Succeeding here is therefore not proof
+that Step 3 took effect, and dropping the `-p` shows nothing unusual.
+
+The password is enforced on every path that arrives from outside that container. To see it, connect
+through the cluster's Service from anywhere else: with no password the answer is
+`ERROR 1045 (28000): Access denied for user 'root' (using password: NO)`, and a wrong password is
+refused the same way.
+:::
+
+## Step 6 — Open the console
+
+The console is an ordinary web service inside the cluster. The quickest way to reach it from your
+own machine is to forward its port:
+
+```bash
+kubectl -n phoenixai port-forward svc/kube-anywhere-console 8090:8090
+```
+
+Leave that running, and in a second terminal confirm the service answers:
+
+```bash
+curl -s localhost:8090/api/v1/health
+# {"code":20000,"data":{"status":"ok"}}
+```
+
+Read the administrator password the chart installed:
+
+```bash
+kubectl -n phoenixai get secret kube-anywhere-console-admin \
+  -o jsonpath='{.data.admin}' | base64 -d; echo
+```
+
+Open **http://localhost:8090** and sign in as `admin` with that password. The cluster list should
+show `kube-anywhere` in the `phoenixai` namespace, reported as elastic. If the list is empty, see
+[the console shows no clusters](#the-console-shows-no-clusters).
+
+:::caution Change this password before anyone else can reach the console
+If the command above printed a long random string, that password was generated for your
+installation alone and is already private to it.
+
+If it printed something short and guessable — `admin`, for instance — your chart version installed a
+**well-known default**, and anyone who can reach the console can sign in as an administrator.
+Replace it now, before you put an Ingress or a load balancer in front of the console. An
+administrator session is what gates the console's most sensitive actions, so treat this as the last
+required step of the install rather than as hardening you will get to later.
+
+```bash
+kubectl -n phoenixai patch secret kube-anywhere-console-admin \
+  --type merge -p "{\"stringData\":{\"admin\":\"$(openssl rand -base64 24)\"}}"
+kubectl -n phoenixai get secret kube-anywhere-console-admin \
+  -o jsonpath='{.data.admin}' | base64 -d; echo
+```
+
+The new password works within about a minute, with no restart. You can also pick your own accounts
+at install time with `anywhere.admin.users`, or point the chart at a Secret you manage yourself with
+`anywhere.admin.existingSecret`.
+:::
+
+Accounts live in that one Secret — one entry per user name. Add, remove or rotate them by editing
+it; changes take effect within about a minute and need no restart:
+
+```bash
+kubectl -n phoenixai edit secret kube-anywhere-console-admin
+```
+
+There is a second sign-in page, for the people who **query** the cluster rather than operate it, at
+**http://localhost:8090/cluster-console/login**. It takes a database user of the cluster itself —
+created with SQL inside PhoenixAI — not a console account. The two sign-ins are independent, and one
+browser can hold both at once.
+
+:::note Port forwarding is for you, not for your users
+`kubectl port-forward` lasts only as long as the command runs, and only for the machine running it.
+To let colleagues reach the console, ask your Kubernetes administrator to put an Ingress or a
+load-balancing Service in front of the `kube-anywhere-console` Service. Terminate TLS there — inside
+the cluster the console speaks plain HTTP — and do not expose it to the public internet.
+:::
+
+## Step 7 — What to set up next
+
+- **Register your license.** The console's health checks report a cluster that has no valid
+  PhoenixAI Database license, so do this before judging a red result.
+- **Add a warehouse**, if you want compute you can scale on its own:
+  [Deploy a Warehouse](./deploy_warehouse_howto.md). Read its note about restarting the operator
+  after the very first warehouse — without that the warehouse is never built, and nothing reports an
+  error.
+- **Turn on monitoring**, so the console's monitoring pages have data:
+  [Deploy Prometheus and Grafana](../Monitor/deploy-prometheus-grafana.md), then
+  [Anywhere Console monitoring](../Monitor/anywhere-monitoring.md).
+- **Turn on query insights.** Two switches, both in `my-values.yaml`: set
+  `anywhere.queryHistory.enabled: true`, and add `enable_collect_query_detail_info = true` to the
+  coordinator configuration — the same `phoenixai.phoenixAIFeSpec.config` block you already wrote.
+  Then re-run the Step 4 command; the coordinators restart with the new configuration. The console's
+  query-insights page names whichever of the two is still missing.
+- **Keep `my-values.yaml`.** Every later change — a bigger disk, more compute nodes, a different
+  password source — is an edit to that file followed by the same `helm upgrade --install` command
+  from Step 4.
+
+## Troubleshooting
+
+Match the symptom you actually see. `kubectl -n phoenixai describe pod <pod-name>` and
+`kubectl -n phoenixai logs <pod-name>` are the two commands behind nearly all of these; add
+`--previous` to `logs` when a pod has already restarted.
+
+### `ImagePullBackOff` or `ErrImagePull`
+
+Kubernetes cannot download an image. In order of likelihood:
+
+1. there is no pull secret in this namespace — go back to
+   [Step 1](#step-1--get-the-images-and-teach-kubernetes-to-pull-them);
+2. the secret exists, but in a **different namespace**:
+   `kubectl get secret --all-namespaces | grep phoenixai-registry`;
+3. the name in the values file does not match the secret's name;
+4. it was referenced in only some of the three places, so some pods pull and others do not — which
+   is why this often affects only part of the install;
+5. the credentials are expired or lack read access — ask your account team to confirm.
+
+`kubectl -n phoenixai describe pod <pod-name> | tail -20` prints the registry's own refusal, which
+is what distinguishes "no credentials" from "credentials rejected".
+
+### A pod stays `Pending`
+
+Nothing has started it yet. `kubectl -n phoenixai describe pod <pod-name> | tail -25` names one of
+two causes:
+
+- **`pod has unbound immediate PersistentVolumeClaims`** — a disk problem. Check
+  `kubectl -n phoenixai get pvc` and `kubectl -n phoenixai describe pvc <claim>`. Usually the
+  `storageClassName` does not exist (compare it against `kubectl get storageclass`), or the cluster
+  has no working storage driver, which your administrator has to install.
+- **`Insufficient cpu` / `Insufficient memory`** — no node has room. Lower `replicas` or the
+  `requests` in your values file, or add capacity.
+
+### The console pod restarts over and over (`CrashLoopBackOff`)
+
+Almost always object storage. The console verifies its bucket at startup by writing, reading and
+deleting one small object, and refuses to serve if that fails:
+
+```bash
+kubectl -n phoenixai logs kube-anywhere-console-0 --previous | tail -30
+```
+
+Check the bucket name, region, endpoint, keys, and `usePathStyle` — false for Amazon S3, usually
+true for self-hosted S3-compatible storage. Fix `my-values.yaml` and rerun the Step 4 command; the
+console restarts by itself when its settings change.
+
+### The console shows no clusters
+
+The console reads clusters through the operator's API, so one of these three is wrong:
+
+1. `operator.phoenixAIOperator.enableApiServer` is not `true`;
+2. `anywhere.operatorApiAddrs` does not match the operator's API Service — confirm the Service
+   exists with `kubectl -n phoenixai get svc kube-anywhere-operator-api`;
+3. `anywhere.watchNamespaces` does not include the namespace the cluster is in.
+
+### The console lists the cluster but every page says it is not supported
+
+The cluster is a **classic** cluster, not an elastic one. Confirm from the database side:
+
+```bash
+kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
+  mysql -h127.0.0.1 -P9030 -uroot -p'<root-password>' -e "ADMIN SHOW FRONTEND CONFIG LIKE 'run_mode'"
+```
+
+If that is not `shared_data`, the `run_mode` block in `phoenixAIFeSpec.config` was missing or edited
+away when the cluster was **first created**. The mode cannot be changed on an existing cluster: fix
+the values file, then uninstall and reinstall. Note that the coordinators' disks are deliberately
+kept on uninstall, so delete those claims too before reinstalling — see
+[Uninstall and clean up](#uninstall-and-clean-up).
+
+### `CREATE TABLE` fails with "no valid cache space"
+
+`datacache_disk_size` is zero or missing on the compute nodes. It must be greater than zero in
+elastic mode.
+
+### The install fails on a `CustomResourceDefinition` conflict
+
+A message like `failed to install CRD ...: Apply failed with 1 conflict: conflict with "kubectl"`
+means PhoenixAI's custom resource definitions are already in this Kubernetes cluster and were put
+there by something other than Helm — usually an earlier install from the YAML manifests, or another
+Helm release. The definitions are shared by the whole Kubernetes cluster, so the safe move is to
+leave them alone and tell Helm not to manage them:
+
+```bash
+helm upgrade --install kube-anywhere phoenixai/kube-anywhere \
+  --namespace phoenixai -f my-values.yaml --skip-crds
+```
+
+Do this only when you know the existing definitions come from the same release version. If they are
+older, upgrade them deliberately first — see
+[Upgrade the Operator](./upgrade_operator_howto.md).
+
+### A second install into the same Kubernetes cluster fails with "already exists"
+
+Object names come from the chart, not from your release name, so a second `kube-anywhere` release in
+the same Kubernetes cluster collides on the cluster-scoped objects even when it uses a different
+namespace. Give the second install its own names with the `nameOverride` values, or see
+[Deploy Multiple Clusters](./deploy_multiple_clusters_howto.md).
+
+### The install is rejected with a `storageClassName` type error
+
+An empty `storageClassName` is not accepted. Name a real class from `kubectl get storageclass`.
+
+### Monitoring pages are empty
+
+No Prometheus is configured. See
+[Anywhere Console monitoring](../Monitor/anywhere-monitoring.md). The console also has an
+administrator dependency check that reports exactly which part of the wiring is missing.
+
+### You lost the console password
+
+It cannot be read back in plain text anywhere else, but it can be replaced: edit the
+`kube-anywhere-console-admin` Secret and set a new value for the `admin` key. The change applies
+within about a minute.
+
+## Uninstall and clean up
+
+```bash
+helm uninstall kube-anywhere --namespace phoenixai
+```
+
+Disks are **kept on purpose**, so that an accidental uninstall does not destroy data: the
+coordinators' metadata volumes, and the console's own volume `data-kube-anywhere-console-0`, which
+holds your usage records. Reinstalling under the same names adopts them again.
+
+Remove them only when you mean it:
+
+```bash
+kubectl -n phoenixai get pvc
+kubectl -n phoenixai delete pvc <claim-name>
+```
+
+An uninstall never empties the bucket. Delete the `data/` and `anywhere/` prefixes yourself if you
+are finished with the installation for good.
+
+## Where to read next
+
+- [kube-anywhere chart reference](../../helm-charts/charts/kube-anywhere/README.md) — every value
+  the chart accepts.
+- [Console tour](../GetStarted/anywhere_console_ui_guide.md) — what each console page is for.
+- [Deploy Multiple Clusters](./deploy_multiple_clusters_howto.md) — more than one cluster in one
+  Kubernetes cluster.
+- [Expand Persistent Volume](../Operate/expand_persistent_volume_howto.md) — growing disks after the
+  fact.
