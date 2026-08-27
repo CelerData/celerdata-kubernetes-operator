@@ -38,14 +38,17 @@ The kube-anywhere chart carries three subcharts:
       ```Bash
       $ helm search repo phoenixai
       NAME                          CHART VERSION    APP VERSION  DESCRIPTION
+      phoenixai/anywhere            2.0.0            v2.0.0       A Helm chart for PhoenixAI Anywhere — a read-only operations & usage console
       phoenixai/kube-anywhere       2.0.0            4.1-latest   kube-anywhere includes three subcharts, operator, phoenixai and anywhere
       phoenixai/operator            2.0.0            2.0.0        A Helm chart for PhoenixAI operator
       phoenixai/phoenixai           2.0.0            4.1-latest   A Helm chart for PhoenixAI cluster
       phoenixai/warehouse           2.0.0            4.1-latest   Warehouse is a feature of the PhoenixAI Enterprise Edition
       ```
 
-      The anywhere console subchart is not listed separately: it ships inside the
-      `kube-anywhere` chart (enable it with `anywhere.enabled=true`).
+      `kube-anywhere` is the install path this guide follows: it carries the console as a
+      subchart, enabled with `anywhere.enabled=true`. The separately listed
+      `phoenixai/anywhere` is the same console packaged on its own, for installing it next
+      to an operator that is managed separately — do not install both.
 
 2. Use the default **[values.yaml](https://github.com/CelerData/phoenixai-kubernetes-operator/blob/main/helm-charts/charts/kube-anywhere/values.yaml)** of the Helm Chart to deploy the PhoenixAI Operator and PhoenixAI cluster, or create a YAML file to customize your deployment configurations.
    1. Deployment with default configurations
@@ -53,9 +56,9 @@ The kube-anywhere chart carries three subcharts:
       Run the following command to deploy the PhoenixAI Operator and the PhoenixAI cluster:
 
       ```Bash
-      $ helm install phoenixai phoenixai/kube-anywhere
+      $ helm install kube-anywhere phoenixai/kube-anywhere
       # If the following result is returned, the PhoenixAI Operator and PhoenixAI cluster are being deployed.
-      NAME: phoenixai
+      NAME: kube-anywhere
       LAST DEPLOYED: Tue Aug 15 15:12:00 2023
       NAMESPACE: phoenixai
       STATUS: deployed
@@ -68,7 +71,7 @@ The kube-anywhere chart carries three subcharts:
       - Run the following command to deploy the PhoenixAI Operator and PhoenixAI cluster with the custom configurations in **my-values.yaml**.
 
         ```Bash
-        helm install -f my-values.yaml phoenixai phoenixai/kube-anywhere
+        helm install -f my-values.yaml kube-anywhere phoenixai/kube-anywhere
         ```
 
     Deployment takes a while. During this period, you can check the deployment status by using the prompt command in the returned result of the deployment command above. The default prompt command is as follows:
@@ -100,14 +103,14 @@ The kube-anywhere chart carries three subcharts:
 
 If you need to upgrade the PhoenixAI Operator and PhoenixAI cluster, run the following command:
 ```bash
-helm upgrade -f my-values.yaml phoenixai phoenixai/kube-anywhere
+helm upgrade -f my-values.yaml kube-anywhere phoenixai/kube-anywhere
 ```
 
 ## Uninstall kube-anywhere Chart
 
 If you need to uninstall the PhoenixAI Operator and PhoenixAI cluster, run the following command:
 ```bash
-helm uninstall phoenixai
+helm uninstall kube-anywhere
 ```
 
 Search Helm Chart maintained by PhoenixAI on Artifact Hub. See [kube-anywhere](https://github.com/CelerData/phoenixai-kubernetes-operator/tree/main/helm-charts/charts/kube-anywhere).

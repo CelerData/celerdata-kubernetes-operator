@@ -76,8 +76,12 @@ Two steps: apply the new CRDs, then point the operator Deployment at the new ima
 VERSION=2.0.0
 
 # 1. Replace the CRDs (helm/kubectl never upgrade these automatically). Use `replace`, not `apply`:
-#    the PhoenixAICluster CRD is too large for kubectl apply's 262144-byte annotation limit (see the
-#    FAQ in deploy_phoenixai_with_operator_howto.md). The CRDs already exist on an upgrade, so `replace` fits.
+#    `apply` copies the whole object into the kubectl.kubernetes.io/last-applied-configuration
+#    annotation, which cannot exceed 262144 bytes. The PhoenixAICluster CRD is ~242 KB — under the
+#    limit, but with less than 8% to spare, and only because these CRDs are generated with field
+#    descriptions stripped (see the FAQ in deploy_phoenixai_with_operator_howto.md). `replace` does
+#    not write that annotation, so it never depends on that margin. The CRDs already exist on an
+#    upgrade, so `replace` fits.
 kubectl replace \
   -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml \
   -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml
@@ -112,8 +116,10 @@ VERSION=2.0.0
 helm repo update phoenixai            # or: helm repo update starrocks-community
 
 # 1. Replace the CRDs (helm upgrade does NOT touch CRDs from a chart's crds/ directory). Use `replace`,
-#    not `apply` — the PhoenixAICluster CRD is too large for kubectl apply's 262144-byte annotation
-#    limit (see the FAQ in deploy_phoenixai_with_operator_howto.md). The CRDs already exist, so `replace` fits.
+#    not `apply` — `apply` copies the whole object into the 262144-byte
+#    kubectl.kubernetes.io/last-applied-configuration annotation, and the PhoenixAICluster CRD sits
+#    at ~242 KB against that limit (see the FAQ in deploy_phoenixai_with_operator_howto.md).
+#    `replace` does not write that annotation. The CRDs already exist, so `replace` fits.
 kubectl replace \
   -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml \
   -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml

@@ -29,12 +29,13 @@ phoenixai:
     replicas: 1
     # set the resolver for nginx server, default kube-dns.kube-system.svc.cluster.local
     resolver: ""
-    limits:
-      cpu: 1
-      memory: 2Gi
-    requests:
-      cpu: 1
-      memory: 2Gi
+    resources:
+      limits:
+        cpu: 1
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 2Gi
     service:
       type: NodePort
       ports:
@@ -52,12 +53,13 @@ phoenixAIFeProxySpec:
   replicas: 1
   # set the resolver for nginx server, default kube-dns.kube-system.svc.cluster.local
   resolver: ""
-  limits:
-    cpu: 1
-    memory: 2Gi
-  requests:
-    cpu: 1
-    memory: 2Gi
+  resources:
+    limits:
+      cpu: 1
+      memory: 2Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
   service:
     type: NodePort
     ports:
@@ -75,3 +77,47 @@ for more details about how to configure `phoenixAIFeProxySpec`.
 
 If you install PhoenixAI with PhoenixAICluster CR yaml, please see
 [deploy_a_phoenixai_cluster_with_fe_proxy.md](../../examples/phoenixai/deploy_a_phoenixai_cluster_with_fe_proxy.yaml)
+
+## Load through the proxy
+
+Once the proxy is running, `kubectl -n <namespace> get phoenixaicluster` reports `FEPROXYSTATUS`
+as `running`, and its Service is named `<cluster-name>-fe-proxy-service`.
+
+The load command is an ordinary Stream Load with **one change: the port**. Send it to the proxy's
+`8080` rather than a coordinator's `8030` — that single substitution is what this whole page exists
+for. Nothing else about the request changes.
+
+Reach the proxy however your cluster exposes it. A `NodePort` or an Ingress is what you would use in
+earnest; for a quick try on your own machine a port forward is enough:
+
+```bash
+kubectl -n <namespace> port-forward svc/<cluster-name>-fe-proxy-service 8080:8080
+```
+
+Then load, against `localhost:8080`:
+
+```bash
+curl --location-trusted -u <user>:<password> \
+    -T ./data.csv \
+    -H "label:my-load-0" \
+    -H "column_separator:," \
+    -H "skip_header:1" \
+    -H "enclose:\"" \
+    -H "columns: col_a, col_b, col_c" \
+    -XPUT http://localhost:8080/api/<database>/<table>/_stream_load
+```
+
+`--location-trusted` matters: it lets curl carry the credentials through the redirect the proxy
+resolves. A successful load answers with `"Status": "Success"` and the row counts it took; a
+rejected one names an `ErrorURL` you can fetch for the offending rows.
+
+Sent to `8030` instead, the same command fails with a message naming a compute node's in-cluster
+address — `Could not resolve host: <cluster>-cn-0.<cluster>-cn-search.<namespace>.svc.cluster.local`
+— which is the symptom this proxy removes.
+
+## A worked example
+
+The quick starts install the proxy and then use it to load two real datasets and query them:
+
+- [Quick start with Amazon S3](../QuickStart/quickstart_s3.md)
+- [Quick start with MinIO](../QuickStart/quickstart_minio.md)

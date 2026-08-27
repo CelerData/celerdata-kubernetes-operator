@@ -18,6 +18,8 @@ site.
 
 ## Deploy
 
+- [Deploy PhoenixAI and the Anywhere console](./Deploy/deploy_step_by_step_howto.md) — the complete
+  step-by-step install, assuming no prior Kubernetes or Helm experience. Start here.
 - [Deploy PhoenixAI With Operator](./Deploy/deploy_phoenixai_with_operator_howto.md)
 - [Deploy PhoenixAI With Helm](./Deploy/deploy_phoenixai_with_helm_howto.md)
 - [Deploy Multiple Clusters](./Deploy/deploy_multiple_clusters_howto.md)

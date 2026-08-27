@@ -192,11 +192,25 @@ queryHistory:
 # ---------------------------------------------------------------------------------------------
 # The accounts live in one Kubernetes Secret (key = username, value = password) mounted into
 # the pod; the backend reads it on every login, so rotating or adding accounts via
-# `kubectl edit secret` takes effect within about a minute — no restart. Three sources, by
-# precedence:
+# `kubectl edit secret` takes effect within about a minute — no restart.
+#
+# THIS CHART SHIPS A DEFAULT ACCOUNT: admin / admin, from the `users` map below. That password
+# is public, so replace it before the console is reachable by anyone else — either set `users` /
+# `existingSecret` here, or edit the rendered Secret after install:
+#   kubectl -n <namespace> edit secret <nameOverride>-admin
+#
+# Three sources, by precedence:
 #   1. existingSecret — name of a Secret you manage yourself (same key = username convention);
 #   2. users          — accounts rendered from values (deterministic: REQUIRED for GitOps/ArgoCD
-#                       installs; note the passwords then live in your values/Git);
+#                       installs; note the passwords then live in your values/Git). This is the
+#                       branch a default install takes, because of the admin/admin below;
+#   3. neither        — clear `users` (`users: {}`) and leave `existingSecret` empty to have the
+#                       chart generate a single "admin" account with a random password instead.
+#                       That mode keeps the password across upgrades via `helm lookup`, which
+#                       sees nothing under `helm template`/ArgoCD — so it is for
+#                       `helm install`/`helm upgrade` only. Read the generated password with:
+#                         kubectl -n <namespace> get secret <nameOverride>-admin \
+#                           -o jsonpath='{.data.admin}' | base64 -d
 admin:
   users:
     admin: "admin"
@@ -274,7 +288,7 @@ license:
 #   fe-startup-probe-not-tuned            info      default startup probe window with persisted metadata
 #   fe-termination-grace-period-short     info      the FE Pod's grace period and fe.conf max_graceful_exit_time_second
 #                                                   do not describe the same graceful-shutdown window
-#   termination-grace-period-short        info      the BE/CN Pod's grace period and the component config's
+#   cn-termination-grace-period-short     info      the CN Pod's grace period and cn.conf
 #                                                   loop_count_wait_fragments_finish do not describe the same
 #                                                   graceful-shutdown window
 #   topology-spread-missing               info      multi-replica components not spread across domains

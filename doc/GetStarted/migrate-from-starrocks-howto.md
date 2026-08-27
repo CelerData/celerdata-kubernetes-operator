@@ -278,8 +278,10 @@ tolerations, affinity, imagePullSecrets, etc.:
 Apply it and wait for the operator to be Running before continuing:
 
 ```bash
-# Install the CRDs first. Use `create`, not `apply`: the PhoenixAICluster CRD is too large for
-# kubectl apply's 262144-byte annotation limit (see the FAQ in deploy_phoenixai_with_operator_howto.md).
+# Install the CRDs first. Use `create`, not `apply`: `apply` copies the whole object into the
+# kubectl.kubernetes.io/last-applied-configuration annotation, and the PhoenixAICluster CRD sits at
+# ~242 KB against that annotation's 262144-byte limit (see the FAQ in
+# deploy_phoenixai_with_operator_howto.md). `create` does not write that annotation at all.
 # This is a first-time install of the phoenixdata.ai CRDs (the cluster only had starrocks.com ones), so
 # `create` fits; on a later operator upgrade you would use `kubectl replace` instead.
 kubectl create \
