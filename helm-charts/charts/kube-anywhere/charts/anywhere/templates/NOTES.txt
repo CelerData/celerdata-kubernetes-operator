@@ -21,6 +21,12 @@ A single "admin" account was generated with a random password. Retrieve it with:
 NOTE: this default relies on `helm lookup` and must not be used with GitOps/ArgoCD or
 `helm template` pipelines (each sync would re-randomize the password) — set
 admin.users or admin.existingSecret there instead.
+{{- else if eq (index .Values.admin.users "admin" | default "") "admin" }}
+
+WARNING: this install carries the chart's default account admin / admin. That password is
+public — replace it before anyone else can reach the console:
+
+  kubectl -n {{ .Release.Namespace }} edit secret {{ template "anywhere.adminSecretName" . }}
 {{- end }}
 Add, remove or rotate accounts with `kubectl -n {{ .Release.Namespace }} edit secret {{ template "anywhere.adminSecretName" . }}`;
 changes take effect within about a minute, no restart needed.

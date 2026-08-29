@@ -10,31 +10,6 @@ description: What each page of the two PhoenixAI Anywhere consoles shows, who ca
 A high-level tour of the Anywhere web console: what it does, who signs in, where each user
 goes, and what every page shows.
 
-:::note Verified on 2026-08-23; re-verified against v2.0.0-rc1 on 2026-08-26
-Walked page by page against a console built from Anywhere `main` (commit `97a0dec`), serving a
-shared-data PhoenixAI 4.1.4-ee cluster — 3 coordinators, 2 warehouses — brought up with
-[Quick start — MinIO](../QuickStart/quickstart_minio.md), with Prometheus scraping and query
-collection enabled.
-
-Sections 1–4 (the Admin Console) were re-verified on 2026-08-26 against **v2.0.0-rc1** (Anywhere
-commit `7b25278`), on a shared-data 4.1.4-ee cluster with 3 coordinators and only the built-in
-warehouse, installed with Deploy step by step against
-Amazon S3, with Prometheus scraping enabled and query collection off. Section 5 (the Cluster
-Console) was re-walked on the same build too, with query collection switched on for the Query
-insights and Query detail pages. Two things that environment cannot show were not re-checked: the
-**Materialized views** and **Views** tabs, which have nothing to list there, and the **Audit logs**
-results table. Screenshots throughout remain those of the original environment.
-
-The cluster holds the [StarRocks shared-data
-tutorial](https://docs.starrocks.io/docs/quick_start/shared-data/) dataset — 423,725 NYC crash
-rows and 22,931 hourly weather rows — plus a partitioned demo table, so the pages that only mean
-something once data has been written and queried are shown populated rather than empty.
-
-Screenshots come from that one environment, with four exceptions called out where they appear:
-three Usage & Metering figures that need weeks of accumulated metering, and the Query insights
-"collection is off" empty state, which this environment cannot show because collection is on.
-:::
-
 ## 1. What the console does
 
 PhoenixAI Anywhere is the self-hosted console for PhoenixAI (StarRocks enterprise) clusters
@@ -236,15 +211,6 @@ reordered, and a per-chart aggregation selector. The display timezone defaults t
 Which charts appear, and which aggregation each defaults to, depends on what the cluster's
 PhoenixAI version exposes — treat any specific set as an example rather than a fixed list; here it
 is Cluster Data Size, Query QPS, Ingested Times and Ingested Rows.
-
-:::note A chart can look empty when it is only scrolled
-Every chart has a horizontal scrollbar of its own and opens on a zoomed viewport, so the span you
-can see is often much shorter than the range control claims — a chart labelled **Last 1 hour** may
-be showing nine minutes of it, and recent data can sit off-screen to the right. Before concluding
-that a metric is missing, drag the chart's scrollbar. The Cluster Console's
-[System monitoring](#system-monitoring--cluster-consolemonitoring) page draws the same charts and
-behaves the same way.
-:::
 
 ![Cluster detail, Monitoring — the step in Cluster Data Size and the spike to 400k+ in Ingested Rows are the 423,725-row stream load](./images/real-cluster-detail-monitoring.jpg)
 

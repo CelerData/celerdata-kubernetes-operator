@@ -8,7 +8,7 @@ site.
 
 - [Console tour](./GetStarted/anywhere_console_ui_guide.md)
 - [Add the Helm Chart Repo for PhoenixAI](./GetStarted/add_helm_repo_howto.md)
-- [Least Permission to Deploy PhoenixAI](./GetStarted/least_permission_to_deploy_phoenixai_howto.md)
+- [Least Permission to Deploy PhoenixAI](./Deploy/least_permission_to_deploy_phoenixai_howto.md)
 - [Migrate from the Open-Source StarRocks Operator to PhoenixAI](./GetStarted/migrate-from-starrocks-howto.md)
 
 ## Quick starts
@@ -46,11 +46,11 @@ site.
 
 ## Operate
 
-- [Load Data Using Stream Load](./Operate/load_data_using_stream_load_howto.md)
+- [Deploy the FE Proxy](./Operate/fe_proxy.md)
 - [Logging and Related Configurations](./Operate/logging_and_related_configurations_howto.md)
 - [Expand Persistent Volume (FE/CN)](./Operate/expand_persistent_volume_howto.md)
 - [Kubernetes Node Maintenance and PodDisruptionBudget](./Operate/node_maintenance_and_pdb_howto.md)
-- [Disaster Recovery for a Shared-Data Cluster](./Operate/disaster_recovery_for_shared_data_cluster_howto.md)
+- [Cluster Snapshot & Restore](./Operate/cluster_snapshot_and_restore.md)
 
 ## Monitor
 

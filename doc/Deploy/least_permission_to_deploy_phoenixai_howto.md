@@ -1,6 +1,7 @@
 ---
 title: Least privilege to deploy
 sidebar_label: Least privilege to deploy
+sidebar_position: 7
 ---
 
 # Least Privilege To Deploy PhoenixAI

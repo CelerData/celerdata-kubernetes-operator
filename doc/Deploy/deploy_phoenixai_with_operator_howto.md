@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # Deploy PhoenixAI Cluster with Operator
 
 This document introduces how to use the PhoenixAI Operator to automate the deployment and management of a PhoenixAI
@@ -179,7 +183,7 @@ From within the Kubernetes cluster, the PhoenixAI cluster can be accessed throug
    ```
 
    Upon deploying a fresh PhoenixAI cluster, the `root` user's password remains unset, potentially posing a security
-   risk. See [Change root user password HOWTO](../Configure/change_root_password_howto.md) for details on how to set
+   risk. See [Change root user password](../Configure/change_root_password_howto.md) for details on how to set
    the `root` user's password.
 
 #### 3.1.2. Access PhoenixAI Cluster from outside Kubernetes Cluster by using LoadBalancer or NodePort
@@ -317,9 +321,13 @@ returned `The CustomResourceDefinition 'phoenixaiclusters.phoenixdata.ai' is inv
 
 **Cause analysis:** Whenever `kubectl apply -f xxx` is used to create or update resources, a metadata
 annotation `kubectl.kubernetes.io/last-applied-configuration` is added. This metadata annotation is in JSON format and
-records the *last-applied-configuration*. `kubectl apply -f xxx`" is suitable for most cases, but in rare situations ,
-such as when the configuration file for the custom resource is too large, it may cause the size of the metadata
-annotation to exceed the limit.
+records the *last-applied-configuration*. `kubectl apply -f xxx` is suitable for most cases, but when the object itself
+is large, that copy can push the annotation past the limit.
+
+The PhoenixAICluster CRD is close to that line. It ships at roughly 242 KB against the 262144-byte limit — it does fit,
+but with under 8% to spare, and only because the released CRDs are generated with field descriptions stripped. Any
+growth can put it back over, and `kubectl create` / `kubectl replace` do not write that annotation at all, so they are
+the safe choice regardless of the current margin.
 
 **Solution:** If you install the custom resource PhoenixAICluster for the first time, it is recommended to
 use `kubectl create -f xxx`. If the custom resource PhoenixAICluster is already installed in the environment, and you

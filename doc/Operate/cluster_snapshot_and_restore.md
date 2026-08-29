@@ -1,16 +1,23 @@
-# Disaster Recovery for shared-data mode Cluster
+---
+title: Cluster Snapshot & Restore
+sidebar_label: Cluster Snapshot & Restore
+description: Take a cluster snapshot, and restore a cluster from one.
+---
 
-From PhoenixAI 3.4.1, the shared-data mode cluster supports disaster recovery. The Operator can configure the disaster
-recovery for the shared-data mode cluster to ensure the data security and high availability.
+# Cluster Snapshot & Restore
 
-The following describes:
+A cluster snapshot writes the cluster's metadata to object storage. Table data already lives in
+object storage; the snapshot is what makes it readable again. If a cluster is lost, you restore it
+by creating a new one that loads the snapshot on startup.
 
-1. How the Operator supports disaster recovery.
-2. Give an example of how to configure the disaster recovery.
+This page covers two things:
 
-## How does Operator support disaster recovery?
+1. How Anywhere runs a restore.
+2. A worked example, from taking a snapshot through to a recovered cluster.
 
-Operator adds the following fields:
+## How Anywhere runs a restore
+
+A restore is driven by these fields on the cluster:
 
 ```yaml
 spec:
@@ -27,22 +34,20 @@ status:
     endTimestamp: yyy     # unix timestamp  
 ```
 
-### When does the DR(disaster recovery) operation trigger?
+### When a restore is triggered
 
 1. The `enabled` field must be true.
 2. The `generation` is a monotonically increasing integer that represents the expected state (spec) change version of
-   the resource object. `observedGeneration` represents the version of the DR operation that has been executed. The
+   the resource object. `observedGeneration` represents the version of the restore that has been executed. The
    Operator compares the values of `generation` and `observedGeneration`: when `disasterRecoveryStatus` is empty,
-   or `observedGeneration < generation`, a new DR operation is triggered.
+   or `observedGeneration < generation`, a new restore is triggered.
    If `generation == observedGeneration` && `disasterRecovery.Phase` != `v1.DRPhaseDone`, it means that after the last
-   reconcile, the PhoenixAI cluster has entered disaster recovery mode.
-3. Check the FE configuration file to ensure that the PhoenixAI cluster is started in shared-data mode.
+   reconcile, the cluster has entered restore mode.
+If both conditions are met, the cluster enters restore mode.
 
-If all the above conditions are met, the Operator will enter the DR mode.
+### How the restore runs
 
-### How does the Operator implement the DR process?
-
-For CN component, the reconcile is paused.
+For the CN component, reconciliation is paused.
 
 The reconcile process for FE is as follows:
 
@@ -52,28 +57,25 @@ The reconcile process for FE is as follows:
     1. Start a single-replica FE.
     2. Inject the `RESTORE_CLUSTER_GENERATION` and `RESTORE_CLUSTER_SNAPSHOT` environment variables. The former is
        used to determine the Generation to which the Pod belongs, and the latter is an environment variable passed to
-       the FE module to trigger the disaster recovery operation of the FE Pod.
-    3. Delete the startup/liveness configuration because the DR operation will take a long time.
+       the FE module to trigger the restore on the FE Pod.
+    3. Delete the startup/liveness configuration, because a restore can take a long time.
     4. Modify the Readiness configuration. The configuration for normal cluster is to send an HTTP request to FE 8030;
        the new configuration is used to detect whether the FE 9030 port is connected. Once connected, it means that the
-       FE Pod disaster recovery operation is complete.
-3. After the FE Pod disaster recovery is complete, according to the configuration of the PhoenixAICluster, PhoenixAI
-   is started normally.
+       FE Pod restore is complete.
+3. Once the FE Pod restore is complete, the cluster starts normally, following the PhoenixAICluster spec.
 
-### How does Operator update the disaster recovery phase?
+### How the restore phase is reported
 
-What is the phase of disaster recovery? In the status, `disasterRecoveryStatus.phase` represents the phase of the
-disaster recovery, including `todo`, `doing`, `done`.
+`disasterRecoveryStatus.phase` reports how far the restore has got: `todo`, `doing`, or `done`.
 
 The status update logic is as follows:
 
-1. The Operator detects that the disaster recovery mode is first entered (disasterRecoveryStatus is empty) or
-   `observedGeneration < generation`. Then the disaster recovery mode enters the `todo` phase.
-2. After the modified Statefulset is applied, update `disasterRecoveryStatus.phase` to the `doing` state. The duration
-   of this state depends on the time it takes to complete the disaster recovery.
-3. The Operator periodically checks the status of the FE Pod. First, confirm the `generation` to which it belongs;
-   second, confirm whether the Pod is Ready.
-4. After the FE Pod is Ready, update `disasterRecoveryStatus.phase` to the `done` mode.
+1. Restore mode is entered for the first time (`disasterRecoveryStatus` is empty) or
+   `observedGeneration < generation`. The phase becomes `todo`.
+2. Once the modified StatefulSet is applied, the phase becomes `doing`. How long it stays there depends on how
+   long the restore takes.
+3. The FE Pod is checked periodically: first its `generation`, then whether it is Ready.
+4. Once the FE Pod is Ready, the phase becomes `done`.
 
 ## Example
 
@@ -81,7 +83,6 @@ Inorder to keep it simple and easy for users to follow this document, we use the
 Please note:
 
 1. Be sure to use at least v1.10.0 version of Operator and CRD.
-2. Be sure to use at least 3.4.1 version of the PhoenixAI image to do disaster recovery.
 3. Sensitive information is replaced by xxx, please set it to a reasonable value.
 
 ### 1. Create a normal working cluster
@@ -315,14 +316,14 @@ persistentvolumeclaim "fe-storage-meta-kube-anywhere-fe-1" deleted
 persistentvolumeclaim "fe-storage-meta-kube-anywhere-fe-2" deleted
 ```
 
-### 5. Create a new cluster for disaster recovery
+### 5. Create a new cluster to restore into
 
 We will reuse the previous `phoenixai-values.yaml` file, so be sure to ensure the security of this configuration file.
-Prepare a new file named `override.yaml`, which contains the configuration required for disaster recovery.
+Prepare a new file named `override.yaml`, which contains the configuration required for the restore.
 
 ```yaml
 phoenixai:
-  phoenixAICluster: # enable disaster recovery
+  phoenixAICluster: # enable restore
     disasterRecovery:
       enabled: true
       generation: 1
@@ -377,9 +378,9 @@ helm install -f ./phoenixai-values.yaml -f override.yaml kube-anywhere phoenixai
 
 ```
 
-The detailed process of disaster recovery is as follows:
+The restore runs as follows:
 
-1. The Operator will start a FE Pod and start the disaster recovery.
+1. Anywhere starts a single FE Pod and begins the restore.
 
    ```text
    kubectl get pods
@@ -400,7 +401,7 @@ The detailed process of disaster recovery is as follows:
        startTimestamp: "1739860263"
    ```
 
-2. After the disaster recovery is complete, the Operator will automatically start other Pods.
+2. Once the restore is complete, the remaining Pods start automatically.
 
    ```text
    kubectl get pods
@@ -424,7 +425,7 @@ The detailed process of disaster recovery is as follows:
        startTimestamp: 1739860263
    ```
 
-### Verify the disaster recovery
+### Verify the restore
 
 ```shell
 # enter the pod

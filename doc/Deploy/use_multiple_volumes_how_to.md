@@ -1,3 +1,7 @@
+---
+sidebar_position: 6
+---
+
 # Deploy PhoenixAI with Multiple Volumes
 
 This document describes how to use multiple volumes to store PhoenixAI data.

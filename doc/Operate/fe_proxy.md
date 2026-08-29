@@ -1,4 +1,4 @@
-# Load Data Using Stream Load
+# Deploy the FE Proxy
 
 The issue is that when the load client residents in a different network other than FE/CN's private network. FE's HTTP
 307 brings CN's private network address to the client who does not recognize and can't process the redirection.
