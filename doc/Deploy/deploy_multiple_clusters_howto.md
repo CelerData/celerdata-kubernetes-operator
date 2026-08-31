@@ -1,4 +1,9 @@
-# Deploy Multiple Clusters HOWTO
+---
+sidebar_position: 2
+sidebar_label: Deploy multiple clusters
+---
+
+# Deploy Multiple Clusters
 
 If you have deployed a PhoenixAI cluster by YAML manifests, you can write a new PhoenixAICluster CR YAML to deploy
 another PhoenixAI cluster.

@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Deploy PhoenixAI With Helm
 
 We have split the kube-anywhere chart into two subcharts: operator and PhoenixAI since v1.8.0.

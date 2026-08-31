@@ -1,3 +1,7 @@
+---
+sidebar_position: 10
+---
+
 # Upgrade the Operator
 
 This guide explains how to upgrade **only the operator** — the controller that reconciles the CRDs —

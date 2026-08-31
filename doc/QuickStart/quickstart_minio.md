@@ -650,7 +650,7 @@ Leave that running, and use a second terminal for everything below.
 It lasts only as long as the command runs, and only on the machine running it. To let colleagues
 load data, ask your Kubernetes administrator to put an Ingress or a load-balancing Service in front
 of `kube-anywhere-fe-proxy-service`. See
-[Load Data Using Stream Load](../Operate/load_data_using_stream_load_howto.md).
+[Deploy the FE Proxy](../Operate/fe_proxy.md).
 :::
 
 **2. Create the database and the two tables:**
