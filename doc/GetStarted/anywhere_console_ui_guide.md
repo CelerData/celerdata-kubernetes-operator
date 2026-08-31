@@ -210,7 +210,10 @@ and recent Kubernetes events; pods carry live CPU and memory against requests.
 reordered, and a per-chart aggregation selector. The display timezone defaults to **UTC+00:00**.
 Which charts appear, and which aggregation each defaults to, depends on what the cluster's
 PhoenixAI version exposes — treat any specific set as an example rather than a fixed list; here it
-is Cluster Data Size, Query QPS, Ingested Times and Ingested Rows.
+is Cluster Data Size, Query QPS, Ingested Times and Ingested Rows. Each chart title carries a
+tooltip describing what that chart measures. An empty chart means no data in the selected window;
+if one is empty when you expect data, run the Prometheus dependency check described in
+[Point the Anywhere Console at Prometheus](../Monitor/anywhere-monitoring.md).
 
 ![Cluster detail, Monitoring — the step in Cluster Data Size and the spike to 400k+ in Ingested Rows are the 423,725-row stream load](./images/real-cluster-detail-monitoring.jpg)
 

@@ -40,7 +40,6 @@ site.
 
 ## Scale
 
-- [Automatic Scaling For CN Nodes](./Scale/automatic_scaling_for_cn_nodes_howto.md)
 - [HPA Automatic Scaling For CN Nodes](./Scale/hpa_dynamic_scaling_with_helm_howto.md)
 - [Scale In FE Nodes](./Scale/scale_in_fe_nodes_howto.md)
 
