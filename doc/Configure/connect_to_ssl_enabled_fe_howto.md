@@ -1,4 +1,4 @@
-# Connect the Operator to an SSL-Enabled FE HOWTO
+# Connect the Operator to an SSL-Enabled FE
 
 The operator talks to FE over the MySQL protocol to run maintenance statements such as
 `SHOW COMPUTE NODES`, `ALTER SYSTEM DROP COMPUTE NODE`, and `DROP WAREHOUSE`. Before this feature the

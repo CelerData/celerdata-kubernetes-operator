@@ -1,4 +1,4 @@
-# Change root user password HOWTO
+# Change root user password
 
 The password is empty for the `root` user when deploying a PhoenixAI cluster from fresh installation. This can be a
 security concern. This document describes steps to change root password and still the operator can manage the cluster

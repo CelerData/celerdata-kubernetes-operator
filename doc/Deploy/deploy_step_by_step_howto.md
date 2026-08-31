@@ -1,6 +1,6 @@
 ---
 title: Deploy PhoenixAI and the Anywhere console
-sidebar_label: Deploy step by step
+sidebar_label: Install PhoenixAI and the console
 sidebar_position: 1
 description: A complete, ordered install of the operator, a shared-data PhoenixAI cluster and the PhoenixAI Anywhere console with the kube-anywhere Helm chart — written so that no prior Kubernetes or Helm experience is assumed.
 ---
@@ -101,7 +101,7 @@ Helm 3.8 or newer. If the command is not found, install Helm from
 Installing creates a namespace, custom resource definitions, StatefulSets, Deployments, Services,
 Secrets, ConfigMaps, PersistentVolumeClaims, a ServiceAccount and its roles. A cluster administrator
 already has all of it. If you are working with a restricted account, hand your administrator
-[Least privilege to deploy](../GetStarted/least_permission_to_deploy_phoenixai_howto.md), which lists
+[Least privilege to deploy](./least_permission_to_deploy_phoenixai_howto.md), which lists
 exactly what to grant.
 
 **4. Pick the StorageClass to use.**

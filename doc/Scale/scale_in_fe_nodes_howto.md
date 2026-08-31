@@ -1,4 +1,8 @@
-# Scale in FE nodes Howto
+---
+sidebar_label: Scale in FE nodes
+---
+
+# Scale in FE nodes
 
 FE nodes in a PhoenixAI cluster are used to store metadata. Normally, users do not need to scale in the FE nodes.
 Incorrect operator may cause metadata inconsistency and malfunction. Be sure for every scale-in op, the number of the

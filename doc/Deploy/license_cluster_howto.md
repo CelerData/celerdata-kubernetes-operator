@@ -1,3 +1,7 @@
+---
+sidebar_position: 9
+---
+
 # License Your PhoenixAI Cluster
 
 After you have deployed your PhoenixAI cluster, you must acquire the license and append it to the cluster. In addition to appending the license while deploying a cluster, you can also append it using the RESTful API.

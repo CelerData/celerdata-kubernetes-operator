@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # Deploy PhoenixAI Cluster with Operator
 
 This document introduces how to use the PhoenixAI Operator to automate the deployment and management of a PhoenixAI
@@ -179,7 +183,7 @@ From within the Kubernetes cluster, the PhoenixAI cluster can be accessed throug
    ```
 
    Upon deploying a fresh PhoenixAI cluster, the `root` user's password remains unset, potentially posing a security
-   risk. See [Change root user password HOWTO](../Configure/change_root_password_howto.md) for details on how to set
+   risk. See [Change root user password](../Configure/change_root_password_howto.md) for details on how to set
    the `root` user's password.
 
 #### 3.1.2. Access PhoenixAI Cluster from outside Kubernetes Cluster by using LoadBalancer or NodePort

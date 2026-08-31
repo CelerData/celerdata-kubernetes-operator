@@ -90,6 +90,10 @@ are present, the resource topology and Instance State pages additionally show pe
 usage and utilization. When they are absent, everything else still works — those particular charts
 degrade rather than break.
 
+If you are not running `kube-prometheus-stack`: cAdvisor metrics come from the kubelet, so they only
+need to be scraped, while kube-state-metrics is a separate component to install and scrape. Running
+without either is a supported setup.
+
 ## It also checks itself
 
 The same probes run per cluster as the `prometheus-dependency-unusable` health-check rule, at

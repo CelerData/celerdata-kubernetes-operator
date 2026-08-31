@@ -1,3 +1,7 @@
+---
+sidebar_position: 5
+---
+
 # Deploy Warehouse
 
 From PhoenixAI Operator v1.9.0, PhoenixAIWarehouse CRD is introduced to manage the warehouse. This document describes
@@ -18,8 +22,8 @@ You can choose one of the following methods to deploy a warehouse:
 1. Deploy Warehouse by YAML Manifest
 2. Deploy Warehouse by Helm Chart
 
-> If you deploy PhoenixAI Cluster with BE and CN nodes, they are added to the `default_warehouse` in PhoenixAI by
-> default. You can also define a Warehouse CR named `default-warehouse` to add more BE and CN nodes to the warehouse.
+> The CN nodes you deploy with a PhoenixAI cluster are added to the `default_warehouse` by default. You can
+> also define a Warehouse CR named `default-warehouse` to add more CN nodes to that warehouse.
 
 ### 2.1 Deploy Warehouse by YAML Manifest
 
