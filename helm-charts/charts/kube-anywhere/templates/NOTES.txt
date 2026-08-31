@@ -9,22 +9,31 @@ It will install the operator and a phoenixai cluster{{ if .Values.anywhere.enabl
 
 Please see the values.yaml for more operation information: https://github.com/CelerData/phoenixai-kubernetes-operator/blob/main/helm-charts/charts/kube-anywhere/values.yaml
 {{- if .Values.anywhere.enabled }}
+{{- $console := default "kube-anywhere-console" .Values.anywhere.nameOverride }}
+{{- $adminSecret := default (printf "%s-admin" $console) .Values.anywhere.admin.existingSecret }}
 
 PhoenixAI Anywhere console:
 
-  kubectl -n {{ .Release.Namespace }} port-forward svc/anywhere {{ .Values.anywhere.httpPort }}:{{ .Values.anywhere.httpPort }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $console }} {{ .Values.anywhere.httpPort }}:{{ .Values.anywhere.httpPort }}
   curl -s localhost:{{ .Values.anywhere.httpPort }}/api/v1/health
 
-{{- $adminSecret := default "anywhere-admin" .Values.anywhere.admin.existingSecret }}
 Anywhere Console accounts live in the Secret "{{ $adminSecret }}" (key = username, value = password).
-{{- if and (not .Values.anywhere.admin.existingSecret) (not .Values.anywhere.admin.users) }}
-A single "admin" account was generated with a random password. Retrieve it with:
+{{- if not .Values.anywhere.admin.existingSecret }}
+Read the password of the "admin" account with:
 
   kubectl -n {{ .Release.Namespace }} get secret {{ $adminSecret }} -o jsonpath='{.data.admin}' | base64 -d; echo
 
-NOTE: this default relies on `helm lookup` and must not be used with GitOps/ArgoCD or
-`helm template` pipelines (each sync would re-randomize the password) — set
+If that prints a short, guessable value, replace it before anyone else can reach the console — an
+admin session gates the console's most sensitive actions:
+
+  kubectl -n {{ .Release.Namespace }} patch secret {{ $adminSecret }} --type merge \
+    -p "{\"stringData\":{\"admin\":\"$(openssl rand -base64 24)\"}}"
+{{- if not .Values.anywhere.admin.users }}
+
+NOTE: a generated password relies on `helm lookup` and must not be used with GitOps/ArgoCD or
+`helm template` pipelines (each sync would re-randomize it) — set
 anywhere.admin.users or anywhere.admin.existingSecret there instead.
+{{- end }}
 {{- end }}
 
 The Cluster Console is a second sign-in page, at /cluster-console/login, for the people who query

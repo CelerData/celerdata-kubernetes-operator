@@ -8,7 +8,7 @@ site.
 
 - [Console tour](./GetStarted/anywhere_console_ui_guide.md)
 - [Add the Helm Chart Repo for PhoenixAI](./GetStarted/add_helm_repo_howto.md)
-- [Least Permission to Deploy PhoenixAI](./GetStarted/least_permission_to_deploy_phoenixai_howto.md)
+- [Least Permission to Deploy PhoenixAI](./Deploy/least_permission_to_deploy_phoenixai_howto.md)
 - [Migrate from the Open-Source StarRocks Operator to PhoenixAI](./GetStarted/migrate-from-starrocks-howto.md)
 
 ## Quick starts
@@ -18,6 +18,8 @@ site.
 
 ## Deploy
 
+- [Deploy PhoenixAI and the Anywhere console](./Deploy/deploy_step_by_step_howto.md) — the complete
+  step-by-step install, assuming no prior Kubernetes or Helm experience. Start here.
 - [Deploy PhoenixAI With Operator](./Deploy/deploy_phoenixai_with_operator_howto.md)
 - [Deploy PhoenixAI With Helm](./Deploy/deploy_phoenixai_with_helm_howto.md)
 - [Deploy Multiple Clusters](./Deploy/deploy_multiple_clusters_howto.md)
@@ -34,20 +36,20 @@ site.
 - [Mount CSI Ephemeral Volumes](./Configure/mount_csi_volumes_howto.md)
 - [Mount External ConfigMaps Or Secrets](./Configure/mount_external_configmaps_or_secrets_howto.md)
 - [Run With a Read-Only Root Filesystem](./Configure/setup-phoenixai-when-readOnlyRootFilesystem-is-true.md)
+- [Use MinIO for Shared Data](./Configure/use_minio_for_shared_data_howto.md)
 
 ## Scale
 
-- [Automatic Scaling For CN Nodes](./Scale/automatic_scaling_for_cn_nodes_howto.md)
 - [HPA Automatic Scaling For CN Nodes](./Scale/hpa_dynamic_scaling_with_helm_howto.md)
 - [Scale In FE Nodes](./Scale/scale_in_fe_nodes_howto.md)
 
 ## Operate
 
-- [Load Data Using Stream Load](./Operate/load_data_using_stream_load_howto.md)
+- [Deploy the FE Proxy](./Operate/fe_proxy.md)
 - [Logging and Related Configurations](./Operate/logging_and_related_configurations_howto.md)
 - [Expand Persistent Volume (FE/CN)](./Operate/expand_persistent_volume_howto.md)
 - [Kubernetes Node Maintenance and PodDisruptionBudget](./Operate/node_maintenance_and_pdb_howto.md)
-- [Disaster Recovery for a Shared-Data Cluster](./Operate/disaster_recovery_for_shared_data_cluster_howto.md)
+- [Cluster Snapshot & Restore](./Operate/cluster_snapshot_and_restore.md)
 
 ## Monitor
 
@@ -55,10 +57,6 @@ site.
 - [Prometheus And Grafana](./Monitor/integration-prometheus-grafana.md)
 - [Anywhere Console monitoring](./Monitor/anywhere-monitoring.md)
 - [Datadog](./Monitor/integration-with-datadog.md)
-
-## How-to Guides
-
-- [Use MinIO for Shared Data](./how-to/use_minio_for_shared_data_howto.md)
 
 ## Reference
 

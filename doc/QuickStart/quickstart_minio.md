@@ -13,18 +13,12 @@ storage from inside the Kubernetes cluster instead of a cloud bucket. That suits
 - a self-contained demo or evaluation, with no cloud account and no bucket to create;
 - an air-gapped installation, where an external S3 endpoint is not reachable at all.
 
-:::note Verified on 2026-08-21
-Run start to finish on a kind cluster with PhoenixAI 4.1.4-ee: MinIO and its bucket, a 3 FE + 1 CN
-cluster started with no storage volume in its configuration file, the storage volume created below,
-a table written and read back through MinIO, warehouse `wh1`, and the console serving against the
-same bucket.
-
-Monitoring was exercised too: all five ServiceMonitor targets scraped, the Grafana dashboard
-populated, and the console's Prometheus dependency check passing every probe — against a cluster
-carrying 446,656 stream-loaded rows and sustained query load, not an idle one.
-
-One part of this page was not exercised: the support-bundle check at the end, which needs a
-signed-in admin.
+:::note New to Kubernetes or Helm?
+This page assumes you can fill in the gaps — it names commands without explaining what a pod, a
+StorageClass or a Helm release is. If that is not you, use
+[Deploy step by step](../Deploy/deploy_step_by_step_howto.md) instead: the same install, in order,
+with a check after every step and nothing assumed. It installs against Amazon S3; come back here for
+the MinIO deltas.
 :::
 
 Everything MinIO changes is object storage configuration. The two differences from the S3 guide are
@@ -36,16 +30,16 @@ worth understanding before you start:
 2. **The S3 client must be told not to look for EC2 credentials.** Outside AWS there is nothing at
    the instance metadata address, and every request waits for that probe to time out first.
 
-{/* COMMON-BEGIN: prerequisites */}
-
 ## Before you start
 
 | You need | Notes |
 | --- | --- |
-| `kubectl`, `helm` | Any recent version |
+| `kubectl`, `helm` | Any recent version; Helm 3.8 or newer |
 | A Kubernetes cluster | `kind create cluster` is enough. Measured on this environment: **3.9 GB** of memory and under one CPU core at rest, with 3 coordinators, 2 compute nodes and MinIO running. 8 GB available to Docker leaves comfortable headroom; the chart values cap each coordinator and compute node at 2 GiB, so a cluster under query load can use more |
+| Access to the PhoenixAI image registry | A key file from your PhoenixAI account team, plus the operator, database and console image tags that go with your release — see [Get the images](#get-the-images) |
 | Enterprise PhoenixAI images | The FE and CN images must be the enterprise (`-ee`) builds. With community images the cluster starts but **no warehouse compute pods are ever created, and nothing reports an error** |
 | A MySQL client | To check the cluster and to run SQL |
+| A PhoenixAI Database license | Not needed to install, but the console's health checks report a cluster without one — see [Register the license](#register-the-license) |
 
 Add the chart repository and see what it offers:
 
@@ -58,12 +52,41 @@ helm search repo phoenixai
 Use the chart names and versions that command lists. One chart — `kube-anywhere` — installs the
 operator, a PhoenixAI cluster, and (with `anywhere.enabled=true`) the Anywhere console. It is also
 distributed as a release archive, so if you do not see it in the repository, install it from the
-`.tgz` for your release.
+`.tgz` for your release — ask your account team for `kube-anywhere-<version>.tgz`.
 
-{/* COMMON-END: prerequisites */}
+:::caution Do not substitute a chart that merely looks similar
+The repository also carries older charts from the previous product generation, named `celerdata` and
+`kube-celerdata`. They are a different, earlier product — not this one under another name, and not a
+fallback.
+:::
+
+## Get the images
+
+The operator, coordinator (FE), compute-node (CN) and console images are enterprise builds in a
+**private registry**, so Kubernetes needs credentials for it. Without them every pod fails with
+`ImagePullBackOff`.
+
+Ask your PhoenixAI account team for two things:
+
+1. **Access to the registry.** The images live in Google Artifact Registry, and access arrives either
+   as a JSON key file they issue for you, or as a grant on a service account of your own that you
+   then issue a key for. Either way you end up holding one JSON key file.
+2. **The image tags for your release** — one each for the operator, the database (FE and CN) and the
+   console. The chart carries defaults, but a default only resolves once that exact version has been
+   published. A tag the registry does not hold fails with `ImagePullBackOff` **even though your
+   credentials are correct**, and the message says nothing about a missing version.
+
+The pull secret is created in [Create the namespace and the pull secret](#create-the-namespace-and-the-pull-secret),
+once the namespace exists. For the longer version — why Artifact Registry has no user name and
+password, how to use short-lived tokens instead, and how to mirror the images into a registry you
+already run — see
+[Deploy step by step, Step 1](../Deploy/deploy_step_by_step_howto.md#step-1--get-the-images-and-teach-kubernetes-to-pull-them).
 
 For an air-gapped installation, stage **five** images in your internal registry: the FE, CN,
-operator and console images, plus `minio/minio` and `minio/mc`.
+operator and console images, plus `minio/minio` and `minio/mc`. Mirroring is also what removes the
+install's dependence on reaching Artifact Registry at all — create the pull secret for **your**
+registry instead, with whatever user name and password it takes, and point `image.repository` at it
+for the operator, the FE, the CN, the console and any warehouse.
 
 :::tip Loading image archives into kind
 `kind load docker-image` fails on the multi-platform archives the `-ee` images ship as, because it
@@ -85,8 +108,6 @@ docker exec --privileged -i <kind-node> \
 
 Then set `imagePullPolicy: IfNotPresent` in the chart values so the kubelet uses the imported copy.
 :::
-
-{/* DELTA-BEGIN: deploy minio */}
 
 ## Deploy MinIO
 
@@ -219,15 +240,39 @@ kubectl -n minio logs job/minio-mkbucket
 The log ends with the `phoenixai` bucket listed. Expect a few `connection refused` lines first —
 the job retries until MinIO is accepting requests.
 
-{/* DELTA-END: deploy minio */}
-
-{/* COMMON-BEGIN: namespace and prometheus */}
-
-## Create the namespace and install Prometheus
+## Create the namespace and the pull secret
 
 ```bash
 kubectl create namespace phoenixai
 ```
+
+Turn the key file from [Get the images](#get-the-images) into a pull secret. For Google Artifact
+Registry two of the three fields are fixed, so only the path to your key file changes:
+
+```bash
+kubectl -n phoenixai create secret docker-registry phoenixai-registry \
+  --docker-server=us-west1-docker.pkg.dev \
+  --docker-username=_json_key \
+  --docker-password="$(cat <path-to-your-key-file>.json)"
+```
+
+- `us-west1-docker.pkg.dev` is the registry host — the part before the first `/` in your image
+  repositories. Use the host your account team gives you.
+- `_json_key` is not a placeholder. It is the literal user name Artifact Registry expects when the
+  password is a service-account key file.
+- The password is the **whole JSON file**, which is what `$(cat …)` passes in.
+
+The secret is per namespace — one in `default` does nothing for pods in `phoenixai` — and the values
+files below reference it **three times**: once for the operator, once for the cluster's components,
+once for the console. A warehouse needs a fourth reference in its own values file. Referencing it in
+only some of them is why an install sometimes pulls half its images and stalls on the rest.
+
+If you mirrored the images into a registry of your own, create the secret for that registry instead
+(`--docker-server`, `--docker-username`, `--docker-password` take a plain user name and password);
+in a kind cluster with the images imported directly and `imagePullPolicy: IfNotPresent`, skip the
+secret and the `imagePullSecrets` lines altogether.
+
+## Install Prometheus
 
 Prometheus is optional, but without it the console's monitoring pages have no data. The
 `kube-prometheus-stack` chart also scrapes kubelet/cAdvisor and kube-state-metrics by default,
@@ -256,8 +301,6 @@ Add it through `metrics.serviceMonitor.labels` in the values below. If you
 installed the stack under a different release name, use that name.
 :::
 
-{/* COMMON-END: namespace and prometheus */}
-
 ## Install the operator, the cluster and the console
 
 One `helm install` of the `kube-anywhere` chart deploys all three. Identical to the S3 guide
@@ -268,6 +311,11 @@ created with SQL in the next step.
 ```yaml
 operator:
   phoenixAIOperator:
+    # (1 of 3) Pull the operator image.
+    imagePullSecrets:
+      - name: phoenixai-registry
+    image:
+      tag: "<operator-image-tag>"
     enableApiServer: true
     watchNamespace: "phoenixai"
 
@@ -281,6 +329,11 @@ phoenixai:
     name: kube-anywhere
     enabledCn: true
     waitForFullRollout: true
+    componentValues:
+      # (2 of 3) Pull the FE and CN images. Set here, this covers both; the FE
+      # proxy below is public nginx and needs no secret.
+      imagePullSecrets:
+        - name: phoenixai-registry
 
   phoenixAIFeSpec:
     replicas: 3
@@ -340,16 +393,30 @@ phoenixai:
       storageSize: 10Gi
       logStorageSize: 1Gi
 
+  # The FE proxy (nginx) is what makes the "Load data and query it" step below
+  # possible from your own machine: it follows the HTTP 307 a coordinator answers
+  # a load with, which points at a compute node address only routable inside the
+  # cluster. Leave it out if you will only ever load from inside the cluster.
+  phoenixAIFeProxySpec:
+    enabled: true
+    replicas: 1
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { cpu: 1, memory: 1Gi }
+
 anywhere:
   # The console is opt-in because it needs object storage of its own.
   enabled: true
+  # (3 of 3) Pull the console image.
+  imagePullSecrets:
+    - name: phoenixai-registry
   image:
     repository: <your-registry>/anywhere
-    tag: <version>
+    tag: <console-image-tag>
 
   # The operator's gRPC API Service, in this namespace.
   operatorApiAddrs:
-    - "kube-anywhere-api:9090"
+    - "kube-anywhere-operator-api:9090"
   watchNamespaces:
     - "phoenixai"
 
@@ -370,7 +437,7 @@ anywhere:
 ```
 
 ```bash
-helm install phoenixai phoenixai/kube-anywhere \
+helm install kube-anywhere phoenixai/kube-anywhere \
   --namespace phoenixai -f cluster-values.yaml
 kubectl -n phoenixai get pods -w
 ```
@@ -379,17 +446,34 @@ The console validates its storage block at startup with a write, read and delete
 prefix, so a wrong endpoint, credential or path-style setting is reported as an actionable error
 rather than surfacing later when someone requests a support bundle.
 
-{/* COMMON-BEGIN: fe logging note */}
-
-
 :::note Keep FE logs as files
 Do not set `LOG_CONSOLE=1` on the FE. The console's audit-log search and the support bundle's log
 collection both read log **files** from the log volume; console-only logging leaves both empty.
 :::
 
-{/* COMMON-END: fe logging note */}
+:::caution The root password can only be set on the first install
+This quick start leaves `root` with no password, which is why every SQL command below passes
+`-uroot` with nothing after it. That is fine on a laptop and wrong anywhere else — and a later
+`helm upgrade` **cannot** set it, so a cluster installed without it keeps an open `root` account
+until someone changes it by hand.
 
-{/* DELTA-BEGIN: storage volume */}
+To set one now, create a Secret before installing and point the chart at it:
+
+```bash
+kubectl -n phoenixai create secret generic phoenixai-root-password \
+  --from-literal=password='<root-password>'
+```
+
+```yaml
+phoenixai:
+  initPassword:
+    enabled: true
+    passwordSecret: phoenixai-root-password
+```
+
+Then add `-p'<root-password>'` to the `mysql` commands below and put the password after the colon in
+`-u root:`. See [Initialize Root Password When First Deploy](../Configure/initialize_root_password_howto.md).
+:::
 
 ## Create the storage volume
 
@@ -425,10 +509,6 @@ SHOW STORAGE VOLUMES;
 DESC STORAGE VOLUME minio_volume;
 ```
 
-{/* DELTA-END: storage volume */}
-
-{/* COMMON-BEGIN: verify cluster sql */}
-
 Check the cluster over SQL:
 
 ```bash
@@ -436,12 +516,52 @@ kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
   mysql -h127.0.0.1 -P9030 -uroot -e "SHOW BACKENDS\G SHOW WAREHOUSES\G"
 ```
 
-{/* COMMON-END: verify cluster sql */}
+## Register the license
+
+A cluster runs without a license, but the console's health checks report it as unlicensed — so do
+this before reading a red result as a fault.
+
+The license API is served by the **leader** coordinator, so find it first:
+
+```bash
+kubectl -n phoenixai exec kube-anywhere-fe-0 -- \
+  mysql -h127.0.0.1 -P9030 -uroot -e "SHOW FRONTENDS\G" | grep -E 'Name|Role'
+```
+
+The `Name` on the `LEADER` row begins with the pod name. Forward that pod's HTTP port, and leave it
+running:
+
+```bash
+kubectl -n phoenixai port-forward pod/kube-anywhere-fe-<leader> 8030:8030
+```
+
+Then, in a second terminal — send the system information to PhoenixAI Support, and register the
+`license.txt` they return:
+
+```bash
+# system information to send to Support
+curl -u root: localhost:8030/api/v1/license/system_info
+
+# after Support returns license.txt
+curl -u root: -XPOST --location-trusted --data-binary @license.txt \
+  localhost:8030/api/v1/license/register
+
+# confirm
+curl -u root: localhost:8030/api/v1/license/list
+```
+
+`-u root:` ends in a colon because no root password was set; if you set one, it goes after the
+colon. The user needs the `cluster_admin` role, which `root` has. Full detail, including the shape
+of each response, is in [License Your PhoenixAI Cluster](../Deploy/license_cluster_howto.md).
+
+In an air-gapped installation this is the one step that needs a way to move two small files in and
+out — the system information string, and `license.txt`.
 
 ## Install a warehouse
 
 As in the S3 guide, plus one addition: **a warehouse runs its own compute nodes**, and they reach
-object storage independently of the cluster's. They need the same environment variable.
+object storage independently of the cluster's. They need the same environment variable — and, since
+they pull the CN image themselves, the fourth reference to the pull secret.
 
 ```yaml
 # warehouse-values.yaml
@@ -453,6 +573,9 @@ metrics:
 spec:
   phoenixAIClusterName: "kube-anywhere"
   replicas: 1
+  # (4th reference) Pull the CN image for this warehouse's own compute nodes.
+  imagePullSecrets:
+    - name: phoenixai-registry
   image:
     repository: <your-registry>/cn-ubuntu
     tag: 4.1.4-ee
@@ -506,15 +629,133 @@ kubectl -n phoenixai exec -it kube-anywhere-fe-0 -- \
   mysql -h127.0.0.1 -P9030 -uroot -e "SHOW WAREHOUSES\G"
 ```
 
-{/* COMMON-BEGIN: sign in */}
+## Load data and query it
+
+Load your own data, or use these datasets and queries to see the system in action. These two datasets
+— 423,725 New York City crash records and 22,931 hourly weather readings — are worth the
+few minutes to work through the loading process.
+
+**1. Reach the cluster over HTTP.** Loading is an HTTP request. Sent straight at a coordinator it is
+answered with an HTTP 307 naming a compute node's *in-cluster* address, which your own machine
+cannot resolve. The FE proxy follows that redirect for you, so send the request there instead — the
+`phoenixAIFeProxySpec` block in the values file above is what created it.
+
+```bash
+kubectl -n phoenixai port-forward svc/kube-anywhere-fe-proxy-service 8080:8080
+```
+
+Leave that running, and use a second terminal for everything below.
+
+:::note A port forward is for you, not for your users
+It lasts only as long as the command runs, and only on the machine running it. To let colleagues
+load data, ask your Kubernetes administrator to put an Ingress or a load-balancing Service in front
+of `kube-anywhere-fe-proxy-service`. See
+[Deploy the FE Proxy](../Operate/fe_proxy.md).
+:::
+
+**2. Create the database and the two tables:**
+
+```bash
+kubectl -n phoenixai exec -i kube-anywhere-fe-0 -- mysql -h127.0.0.1 -P9030 -uroot <<'SQL'
+CREATE DATABASE IF NOT EXISTS quickstart;
+USE quickstart;
+CREATE TABLE IF NOT EXISTS crashdata (
+    CRASH_DATE DATETIME, BOROUGH STRING, ZIP_CODE STRING, LATITUDE INT, LONGITUDE INT,
+    LOCATION STRING, ON_STREET_NAME STRING, CROSS_STREET_NAME STRING, OFF_STREET_NAME STRING,
+    CONTRIBUTING_FACTOR_VEHICLE_1 STRING, CONTRIBUTING_FACTOR_VEHICLE_2 STRING, COLLISION_ID INT,
+    VEHICLE_TYPE_CODE_1 STRING, VEHICLE_TYPE_CODE_2 STRING);
+CREATE TABLE IF NOT EXISTS weatherdata (
+    DATE DATETIME, NAME STRING, HourlyDewPointTemperature STRING, HourlyDryBulbTemperature STRING,
+    HourlyPrecipitation STRING, HourlyPresentWeatherType STRING, HourlyPressureChange STRING,
+    HourlyPressureTendency STRING, HourlyRelativeHumidity STRING, HourlySkyConditions STRING,
+    HourlyVisibility STRING, HourlyWetBulbTemperature STRING, HourlyWindDirection STRING,
+    HourlyWindGustSpeed STRING, HourlyWindSpeed STRING);
+SQL
+```
+
+**3. Download the two files:**
+
+```bash
+curl -O https://raw.githubusercontent.com/StarRocks/demo/master/documentation-samples/quickstart/datasets/NYPD_Crash_Data.csv
+curl -O https://raw.githubusercontent.com/StarRocks/demo/master/documentation-samples/quickstart/datasets/72505394728.csv
+```
+
+**4. Load the crash data.** The `columns:` list names every column in the file, in order, so the
+ones the table does not keep can be skipped; `CRASH_DATE` is assembled from the file's separate date
+and time fields. `-u root:` ends in a colon because this quick start never set a root password — if
+you set one, it goes after the colon.
+
+```bash
+curl --location-trusted -u root: \
+    -T ./NYPD_Crash_Data.csv \
+    -H "label:crashdata-0" \
+    -H "column_separator:," \
+    -H "skip_header:1" \
+    -H "enclose:\"" \
+    -H "max_filter_ratio:1" \
+    -H "columns:tmp_CRASH_DATE, tmp_CRASH_TIME, CRASH_DATE=str_to_date(concat_ws(' ', tmp_CRASH_DATE, tmp_CRASH_TIME), '%m/%d/%Y %H:%i'),BOROUGH,ZIP_CODE,LATITUDE,LONGITUDE,LOCATION,ON_STREET_NAME,CROSS_STREET_NAME,OFF_STREET_NAME,NUMBER_OF_PERSONS_INJURED,NUMBER_OF_PERSONS_KILLED,NUMBER_OF_PEDESTRIANS_INJURED,NUMBER_OF_PEDESTRIANS_KILLED,NUMBER_OF_CYCLIST_INJURED,NUMBER_OF_CYCLIST_KILLED,NUMBER_OF_MOTORIST_INJURED,NUMBER_OF_MOTORIST_KILLED,CONTRIBUTING_FACTOR_VEHICLE_1,CONTRIBUTING_FACTOR_VEHICLE_2,CONTRIBUTING_FACTOR_VEHICLE_3,CONTRIBUTING_FACTOR_VEHICLE_4,CONTRIBUTING_FACTOR_VEHICLE_5,COLLISION_ID,VEHICLE_TYPE_CODE_1,VEHICLE_TYPE_CODE_2,VEHICLE_TYPE_CODE_3,VEHICLE_TYPE_CODE_4,VEHICLE_TYPE_CODE_5" \
+    -XPUT http://localhost:8080/api/quickstart/crashdata/_stream_load
+```
+
+A successful load answers with `"Status": "Success"` and the rows it took. One row of this file is
+rejected by the date conversion, which is why `max_filter_ratio` is set — expect
+`"NumberLoadedRows": 423725` and `"NumberFilteredRows": 1`.
+
+**5. Load the weather data.** The same shape, with this file's own (much longer) column list:
+
+```bash
+curl --location-trusted -u root: \
+    -T ./72505394728.csv \
+    -H "label:weather-0" \
+    -H "column_separator:," \
+    -H "skip_header:1" \
+    -H "enclose:\"" \
+    -H "max_filter_ratio:1" \
+    -H "columns: STATION, DATE, LATITUDE, LONGITUDE, ELEVATION, NAME, REPORT_TYPE, SOURCE, HourlyAltimeterSetting, HourlyDewPointTemperature, HourlyDryBulbTemperature, HourlyPrecipitation, HourlyPresentWeatherType, HourlyPressureChange, HourlyPressureTendency, HourlyRelativeHumidity, HourlySkyConditions, HourlySeaLevelPressure, HourlyStationPressure, HourlyVisibility, HourlyWetBulbTemperature, HourlyWindDirection, HourlyWindGustSpeed, HourlyWindSpeed, Sunrise, Sunset, DailyAverageDewPointTemperature, DailyAverageDryBulbTemperature, DailyAverageRelativeHumidity, DailyAverageSeaLevelPressure, DailyAverageStationPressure, DailyAverageWetBulbTemperature, DailyAverageWindSpeed, DailyCoolingDegreeDays, DailyDepartureFromNormalAverageTemperature, DailyHeatingDegreeDays, DailyMaximumDryBulbTemperature, DailyMinimumDryBulbTemperature, DailyPeakWindDirection, DailyPeakWindSpeed, DailyPrecipitation, DailySnowDepth, DailySnowfall, DailySustainedWindDirection, DailySustainedWindSpeed, DailyWeather, MonthlyAverageRH, MonthlyDaysWithGT001Precip, MonthlyDaysWithGT010Precip, MonthlyDaysWithGT32Temp, MonthlyDaysWithGT90Temp, MonthlyDaysWithLT0Temp, MonthlyDaysWithLT32Temp, MonthlyDepartureFromNormalAverageTemperature, MonthlyDepartureFromNormalCoolingDegreeDays, MonthlyDepartureFromNormalHeatingDegreeDays, MonthlyDepartureFromNormalMaximumTemperature, MonthlyDepartureFromNormalMinimumTemperature, MonthlyDepartureFromNormalPrecipitation, MonthlyDewpointTemperature, MonthlyGreatestPrecip, MonthlyGreatestPrecipDate, MonthlyGreatestSnowDepth, MonthlyGreatestSnowDepthDate, MonthlyGreatestSnowfall, MonthlyGreatestSnowfallDate, MonthlyMaxSeaLevelPressureValue, MonthlyMaxSeaLevelPressureValueDate, MonthlyMaxSeaLevelPressureValueTime, MonthlyMaximumTemperature, MonthlyMeanTemperature, MonthlyMinSeaLevelPressureValue, MonthlyMinSeaLevelPressureValueDate, MonthlyMinSeaLevelPressureValueTime, MonthlyMinimumTemperature, MonthlySeaLevelPressure, MonthlyStationPressure, MonthlyTotalLiquidPrecipitation, MonthlyTotalSnowfall, MonthlyWetBulb, AWND, CDSD, CLDD, DSNW, HDSD, HTDD, NormalsCoolingDegreeDay, NormalsHeatingDegreeDay, ShortDurationEndDate005, ShortDurationEndDate010, ShortDurationEndDate015, ShortDurationEndDate020, ShortDurationEndDate030, ShortDurationEndDate045, ShortDurationEndDate060, ShortDurationEndDate080, ShortDurationEndDate100, ShortDurationEndDate120, ShortDurationEndDate150, ShortDurationEndDate180, ShortDurationPrecipitationValue005, ShortDurationPrecipitationValue010, ShortDurationPrecipitationValue015, ShortDurationPrecipitationValue020, ShortDurationPrecipitationValue030, ShortDurationPrecipitationValue045, ShortDurationPrecipitationValue060, ShortDurationPrecipitationValue080, ShortDurationPrecipitationValue100, ShortDurationPrecipitationValue120, ShortDurationPrecipitationValue150, ShortDurationPrecipitationValue180, REM, BackupDirection, BackupDistance, BackupDistanceUnit, BackupElements, BackupElevation, BackupEquipment, BackupLatitude, BackupLongitude, BackupName, WindEquipmentChangeDate" \
+    -XPUT http://localhost:8080/api/quickstart/weatherdata/_stream_load
+```
+
+Expect `"NumberLoadedRows": 22931` and no filtered rows.
+
+**6. Ask the data something.** Crashes per hour, and the average temperature per hour:
+
+```bash
+kubectl -n phoenixai exec -i kube-anywhere-fe-0 -- mysql -h127.0.0.1 -P9030 -uroot -D quickstart <<'SQL'
+SELECT COUNT(*), date_trunc("hour", crashdata.CRASH_DATE) AS Time
+FROM crashdata GROUP BY Time ORDER BY Time ASC LIMIT 200;
+
+SELECT avg(HourlyDryBulbTemperature), date_trunc("hour", weatherdata.DATE) AS Time
+FROM weatherdata GROUP BY Time ORDER BY Time ASC LIMIT 100;
+SQL
+```
+
+Then the question neither table answers alone — how many crashes happened in the hours when
+visibility was poor, and what the weather was:
+
+```bash
+kubectl -n phoenixai exec -i kube-anywhere-fe-0 -- mysql -h127.0.0.1 -P9030 -uroot -D quickstart <<'SQL'
+SELECT COUNT(DISTINCT c.COLLISION_ID) AS Crashes,
+       truncate(avg(w.HourlyDryBulbTemperature), 1) AS Temp_F,
+       truncate(avg(w.HourlyVisibility), 2) AS Visibility,
+       max(w.HourlyPrecipitation) AS Precipitation,
+       date_format((date_trunc("hour", c.CRASH_DATE)), '%d %b %Y %H:%i') AS Hour
+FROM crashdata c
+LEFT JOIN weatherdata w ON date_trunc("hour", c.CRASH_DATE)=date_trunc("hour", w.DATE)
+WHERE w.HourlyVisibility BETWEEN 0.0 AND 1.0
+GROUP BY Hour ORDER BY Crashes DESC LIMIT 100;
+SQL
+```
+
+Swap the `WHERE` clause for `w.HourlyDryBulbTemperature BETWEEN 0.0 AND 40.5` to ask the same
+question about freezing hours instead.
 
 ## Sign in
 
 The console was installed together with the cluster (the `anywhere:` block above). Wait for it:
 
 ```bash
-kubectl -n phoenixai rollout status statefulset/anywhere
-kubectl -n phoenixai port-forward svc/anywhere 8090:8090
+kubectl -n phoenixai rollout status statefulset/kube-anywhere-console
+kubectl -n phoenixai port-forward svc/kube-anywhere-console 8090:8090
 ```
 
 Check the service answers, then open the console at `http://localhost:8090`:
@@ -524,23 +765,33 @@ curl -s localhost:8090/api/v1/health
 # {"code":20000,"data":{"status":"ok"}}
 ```
 
-Admin accounts live in the `anywhere-admin` Secret — one key per username. If you did not
+Admin accounts live in the `kube-anywhere-console-admin` Secret — one key per username. If you did not
 supply any, a single `admin` account was generated with a random password:
 
 ```bash
-kubectl -n phoenixai get secret anywhere-admin \
+kubectl -n phoenixai get secret kube-anywhere-console-admin \
   -o jsonpath='{.data.admin}' | base64 -d; echo
 ```
 
 Add, remove or rotate accounts by editing that Secret; changes take effect within about a minute
 and need no restart.
 
+:::caution Replace a short, guessable password before anyone else can reach the console
+A long random string was generated for your installation alone. If the command printed something
+short — `admin`, for instance — your chart version installed a **well-known default**, and anyone
+who can reach the console can sign in as an administrator. Replace it before you put an Ingress or
+a load balancer in front of the console:
+
+```bash
+kubectl -n phoenixai patch secret kube-anywhere-console-admin \
+  --type merge -p "{\"stringData\":{\"admin\":\"$(openssl rand -base64 24)\"}}"
+```
+:::
+
 To reach the **Cluster Console** — the per-cluster view, with the data catalog, query insights and
 system monitoring — go to `http://localhost:8090/cluster-console/login` and sign in with a database
 user from the cluster itself. That is a PhoenixAI database user, created in the cluster with SQL,
 not an Anywhere account.
-
-{/* COMMON-END: sign in */}
 
 ## Check the whole path
 
@@ -568,8 +819,6 @@ startup with a write, read and delete, which leaves nothing behind. To see objec
 create a support bundle from the console (Support → Create support bundle) and list that prefix
 afterwards.
 
-{/* COMMON-BEGIN: what to enable next */}
-
 ## What to enable next
 
 **Query insights is off by default.** The page needs two settings, in two different places:
@@ -580,11 +829,16 @@ afterwards.
 
 The page names both in its empty state, so you do not have to remember which is missing.
 
-{/* COMMON-END: what to enable next */}
-
 ## Troubleshooting
 
-{/* DELTA-BEGIN: troubleshooting minio */}
+**Pods stay in `ImagePullBackOff` or `ErrImagePull`.** In order of likelihood: there is no pull
+secret in this namespace; the secret is in a different one
+(`kubectl get secret --all-namespaces | grep phoenixai-registry`); the name in the values file does
+not match; it was named in only some of the three places, which is why this often affects part of
+the install and not the rest; the tag names a version the registry does not hold; or the credentials
+are expired. On kind, it can also mean `kind load` reported success while importing nothing — see
+the tip under [Get the images](#get-the-images). `kubectl -n phoenixai describe pod <pod> | tail -20`
+prints the registry's own refusal, which separates "no credentials" from "credentials rejected".
 
 **The FE cannot reach storage, or table creation fails with an S3 error.** Check that
 `aws.s3.enable_path_style_access` is `true` on the storage volume (`DESC STORAGE VOLUME`). Without
@@ -604,10 +858,6 @@ storage works, everything is just slow.
 (`http://…`), and `usePathStyle` must be `true`. The startup probe names which operation failed.
 
 **The bucket does not exist.** Re-run the bucket job; nothing else creates it.
-
-{/* DELTA-END: troubleshooting minio */}
-
-{/* COMMON-BEGIN: troubleshooting shared */}
 
 **`CREATE TABLE` fails with "no valid cache space".** `datacache_disk_size` is zero on the compute
 nodes. It must be greater than zero in shared-data mode.
@@ -632,4 +882,3 @@ community builds rather than enterprise `-ee`.
 **Monitoring pages are empty.** Prometheus is not installed, `anywhere.dependencies.prometheus` is not set,
 or the ServiceMonitors were not rendered (`metrics.serviceMonitor.enabled`).
 
-{/* COMMON-END: troubleshooting shared */}

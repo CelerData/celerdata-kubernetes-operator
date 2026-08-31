@@ -89,8 +89,9 @@ recreated.
 ### Side effect: reused PVCs keep the old owner-reference label
 
 Because the two operators put a different owner-label key into the StatefulSet selector, the reused
-PVCs end up with a label that does not match the new operator's key. This is **cosmetic and safe to
-leave as-is** — but it is worth understanding, and you may optionally clean it up.
+PVCs end up with a label that does not match the new operator's key. This is **cosmetic as far as
+the operator is concerned** — it identifies a component's PVCs by name, exactly as the StatefulSet
+does — but it can matter to **your own** tooling, and you may clean it up.
 
 When a StatefulSet creates a PVC from its `volumeClaimTemplate`, Kubernetes stamps the STS's
 `.spec.selector.matchLabels` onto that PVC. It does this **only when it creates the PVC** — it never
@@ -102,16 +103,19 @@ relabels a PVC it merely reuses. So after the cutover:
 - PVCs created **after** migration (e.g. ordinals added by a later scale-out) get the **new**
   `app.phoenixai.ownerreference/name` label.
 
-This does **not** affect the migration: a StatefulSet binds a pod to its PVC **by name**, not by
-label, so PVC reuse and data preservation never depend on the label. The PhoenixAI operator also
-never selects PVCs by this label (it only lists *pods* by label), so reconciliation, scaling and PVC
-retention all work regardless of which owner-label a PVC carries.
+**The migration is unaffected, and so is the operator**: a StatefulSet binds a pod to its PVC
+**by name**, not by label, so PVC reuse, data preservation, pod startup and PVC retention never
+depend on the label. The operator identifies a component's PVCs the same way — by the
+`<volume>-<statefulset>-<ordinal>` name convention — so volume expansion, scaling, and the PVC
+entries the Anywhere console shows all work on a reused PVC regardless of which owner label it
+carries.
 
-The only thing to watch is **your own tooling**: backup jobs, scripts or dashboards that select PVCs
-by `app.starrocks.ownerreference/name` keep matching the pre-migration PVCs but miss any created
+The thing to watch is **your own tooling**: backup jobs, scripts or dashboards that select PVCs by
+`app.starrocks.ownerreference/name` keep matching the pre-migration PVCs but miss any created
 afterward — and the reverse for anything keyed on the PhoenixAI label. We deliberately leave the
-labels untouched rather than mutate your live PVCs. If you want them uniform, relabel the reused PVCs
-yourself **after the cluster is healthy** — this is metadata-only and does not disturb running pods:
+labels untouched rather than mutate your live PVCs. If you want them uniform, relabel the reused
+PVCs yourself **after the cluster is healthy** — this is metadata-only and does not disturb running
+pods:
 
 ```bash
 # Add the PhoenixAI owner-reference label to the reused PVCs.
@@ -274,8 +278,10 @@ tolerations, affinity, imagePullSecrets, etc.:
 Apply it and wait for the operator to be Running before continuing:
 
 ```bash
-# Install the CRDs first. Use `create`, not `apply`: the PhoenixAICluster CRD is too large for
-# kubectl apply's 262144-byte annotation limit (see the FAQ in deploy_phoenixai_with_operator_howto.md).
+# Install the CRDs first. Use `create`, not `apply`: `apply` copies the whole object into the
+# kubectl.kubernetes.io/last-applied-configuration annotation, and the PhoenixAICluster CRD sits at
+# ~242 KB against that annotation's 262144-byte limit (see the FAQ in
+# deploy_phoenixai_with_operator_howto.md). `create` does not write that annotation at all.
 # This is a first-time install of the phoenixdata.ai CRDs (the cluster only had starrocks.com ones), so
 # `create` fits; on a later operator upgrade you would use `kubectl replace` instead.
 kubectl create \
@@ -479,20 +485,15 @@ mysql -h 127.0.0.1 -P 9030 -u root      # add -p if a password is set
 Confirm membership and data:
 
 ```sql
-SHOW
-FRONTENDS;        -- all FEs present, Alive = true
-SHOW
-BACKENDS;         -- all BEs present, Alive = true
-SHOW
-COMPUTE NODES;    -- all CNs present, Alive = true
+SHOW FRONTENDS;      -- all FEs present, Alive = true
+SHOW COMPUTE NODES;  -- all CNs present, Alive = true (shared-data CNs also appear in SHOW BACKENDS)
 
 -- spot-check a known table:
-SELECT COUNT(*)
-FROM <your_db>.<your_table>;
+SELECT COUNT(*) FROM <your_db>.<your_table>;
 ```
 
-If `SHOW BACKENDS` lists the nodes by their old FQDN and `Alive = true`, the identity and data were preserved
-successfully.
+If `SHOW COMPUTE NODES` lists the nodes by their old FQDN and `Alive = true`, the identity and data
+were preserved successfully.
 
 ## Warehouses
 
@@ -586,7 +587,7 @@ helm install <oss-release> starrocks-community/kube-starrocks -n "$NS" -f kube-s
 
 ## Checklist
 
-- [ ] PVC retention policy is `Retain` on **every** component with PVCs (FE **and** BE/CN)
+- [ ] PVC retention policy is `Retain` on **every** component with PVCs (FE **and** CN)
 - [ ] Converted CR/values keep the **same** name / namespace / `storageVolume` (or `storageSpec`) names
 - [ ] (Path A) live CR backed up to `sr-backup.yaml`
 - [ ] (Path A) live operator.yaml backed up to `operator-backup.yaml`
@@ -597,7 +598,7 @@ helm install <oss-release> starrocks-community/kube-starrocks -n "$NS" -f kube-s
 - [ ] (Path B) the flipped-default pins are present in the converted values (`waitForFullRollout`,
   `componentValues.runAsNonRoot`, FE `storageSpec.name: ""`, `enablePVCExpansion`) unless you set
   those keys yourself
-- [ ] `SHOW FRONTENDS/BACKENDS/COMPUTE NODES` all `Alive = true` after cutover
+- [ ] `SHOW FRONTENDS` / `SHOW COMPUTE NODES` all `Alive = true` after cutover
 - [ ] (Optional) reused PVCs relabeled to `app.phoenixai.ownerreference/name`, or your PVC tooling
   updated to account for the mixed owner-reference labels (see "reused PVCs keep the old
   owner-reference label")

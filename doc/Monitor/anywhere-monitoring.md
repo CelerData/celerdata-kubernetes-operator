@@ -57,7 +57,7 @@ curl -s -b cookies.txt -X POST \
   localhost:8090/api/v1/admin/dependencies/prometheus/check
 ```
 
-Admin passwords live in the `kube-anywhere-admin` Secret, one key per username.
+Admin passwords live in the `kube-anywhere-console-admin` Secret, one key per username.
 
 A correctly wired installation reports every probe `ok`:
 
@@ -89,6 +89,10 @@ kubelet/cAdvisor and kube-state-metrics, which `kube-prometheus-stack` scrapes b
 are present, the resource topology and Instance State pages additionally show per-pod CPU and memory
 usage and utilization. When they are absent, everything else still works — those particular charts
 degrade rather than break.
+
+If you are not running `kube-prometheus-stack`: cAdvisor metrics come from the kubelet, so they only
+need to be scraped, while kube-state-metrics is a separate component to install and scrape. Running
+without either is a supported setup.
 
 ## It also checks itself
 

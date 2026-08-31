@@ -1,4 +1,4 @@
-# Connect the Operator to an SSL-Enabled FE HOWTO
+# Connect the Operator to an SSL-Enabled FE
 
 The operator talks to FE over the MySQL protocol to run maintenance statements such as
 `SHOW COMPUTE NODES`, `ALTER SYSTEM DROP COMPUTE NODE`, and `DROP WAREHOUSE`. Before this feature the
@@ -100,7 +100,7 @@ If you installed the `kube-anywhere` umbrella chart instead of the standalone `o
 same value lives one level deeper, under the `operator` subchart:
 
 ```bash
-helm upgrade phoenixai phoenixai/kube-anywhere \
+helm upgrade kube-anywhere phoenixai/kube-anywhere \
   --reuse-values \
   --set operator.phoenixAIOperator.feSslMode=REQUIRED
 ```
