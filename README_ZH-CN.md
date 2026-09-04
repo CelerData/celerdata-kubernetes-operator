@@ -50,7 +50,7 @@ Operator，您可以轻松管理 PhoenixAI 集群的生命周期，如安装、�
 
 ### 通过 yaml Manifest 安装
 
-请参阅 [使用 Operator 部署 PhoenixAI 文档](./doc/Deploy/deploy_phoenixai_with_operator_howto.md) 以获取更多详细信息。
+请参阅 [使用 Operator 部署 PhoenixAI 文档](./doc/Deploy/install_with_kubectl.md) 以获取更多详细信息。
 
 首先，Apply 自定义资源定义 (CRD)：
 

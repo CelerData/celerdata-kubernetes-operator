@@ -7,25 +7,23 @@ site.
 ## Get started
 
 - [Console tour](./GetStarted/anywhere_console_ui_guide.md)
-- [Add the Helm Chart Repo for PhoenixAI](./GetStarted/add_helm_repo_howto.md)
 - [Least Permission to Deploy PhoenixAI](./Deploy/least_permission_to_deploy_phoenixai_howto.md)
-- [Migrate from the Open-Source StarRocks Operator to PhoenixAI](./GetStarted/migrate-from-starrocks-howto.md)
+- [Migrate from the Open-Source StarRocks Operator to PhoenixAI](./Deploy/migrate-from-starrocks-howto.md)
 
 ## Quick starts
 
-- [Quick start with Amazon S3](./QuickStart/quickstart_s3.md)
-- [Quick start with MinIO](./QuickStart/quickstart_minio.md)
+- [Quick start with Amazon S3](./GetStarted/quickstart_s3.md)
+- [Quick start with MinIO](./GetStarted/quickstart_minio.md)
 
 ## Deploy
 
-- [Deploy PhoenixAI and the Anywhere console](./Deploy/deploy_step_by_step_howto.md) — the complete
+- [Prerequisites](./Deploy/prerequisites.md) — what to have in hand, and the checks to run first.
+- [Install with Helm](./Deploy/install_with_helm.md) — the complete
   step-by-step install, assuming no prior Kubernetes or Helm experience. Start here.
-- [Deploy PhoenixAI With Operator](./Deploy/deploy_phoenixai_with_operator_howto.md)
-- [Deploy PhoenixAI With Helm](./Deploy/deploy_phoenixai_with_helm_howto.md)
+- [Install with kubectl](./Deploy/install_with_kubectl.md)
 - [Deploy Multiple Clusters](./Deploy/deploy_multiple_clusters_howto.md)
 - [Deploy a Warehouse](./Deploy/deploy_warehouse_howto.md)
 - [Upgrade the Operator](./Deploy/upgrade_operator_howto.md)
-- [Use Multiple Volumes](./Deploy/use_multiple_volumes_how_to.md)
 
 ## Configure
 

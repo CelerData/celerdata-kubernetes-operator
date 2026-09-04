@@ -60,7 +60,7 @@ CN cache data.
 
 ## 2. Mounting Persistent Volumes by Helm Chart
 
-See [helm_repo_add_howto](../GetStarted/add_helm_repo_howto.md) to learn how to add the Helm Chart Repo for PhoenixAI. In this
+See [Step 2 — Get the chart](../Deploy/install_with_helm.md#step-2--get-the-chart) to learn how to add the Helm chart repo for PhoenixAI. In this
 guide, we will use `phoenixai/kube-anywhere` chart to deploy both PhoenixAI operator and cluster.
 
 ### 2.1. Download the values.yaml file for the kube-anywhere chart

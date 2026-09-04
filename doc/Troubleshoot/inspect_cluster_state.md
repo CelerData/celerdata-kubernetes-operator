@@ -3,7 +3,6 @@ title: Inspect cluster state
 sidebar_label: Inspect cluster state
 sidebar_position: 2
 description: Read-only SQL checks for nodes, jobs and configuration, and the shell diagnostics that are disabled by default.
-draft: true
 ---
 
 # Inspect cluster state

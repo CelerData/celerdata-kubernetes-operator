@@ -9,7 +9,7 @@ Import it in Grafana with **Dashboards -> New -> Import**, paste the JSON, and
 pick your Prometheus data source. It expects the labels the `kube-anywhere`
 chart's ServiceMonitors apply, so `metrics.serviceMonitor.enabled` must be `true`
 and the ServiceMonitors must actually be selected by your Prometheus — see the
-`release` label note in doc/QuickStart.
+`release` label note in doc/GetStarted.
 
 Importing through the API rather than the UI? The datasource input is named
 `PhoenixAI_Prometheus`; pass it under that name or the import fails with

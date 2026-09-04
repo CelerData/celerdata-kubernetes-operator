@@ -1,5 +1,7 @@
 ---
+sidebar_label: Install with kubectl
 sidebar_position: 4
+title: Install with kubectl
 ---
 
 # Deploy PhoenixAI Cluster with Operator
@@ -16,7 +18,17 @@ It includes the following parts:
     2. Upgrade PhoenixAI cluster
     3. Scale PhoenixAI cluster
     4. Using ConfigMap to configure your PhoenixAI cluster
-  
+4. Install the Anywhere console
+
+:::note What this path installs
+The manifests on this page deploy the **operator** and a **PhoenixAI cluster** — not the
+**PhoenixAI Anywhere console**. The console ships only as a Helm chart, so there are no manifests
+to apply for it here. [Install with Helm](./install_with_helm.md) is the complete install
+including the console; to add the console next to an operator and cluster you manage with
+kubectl, see [Install the Anywhere console](#4-install-the-anywhere-console) at the end of this
+page.
+:::
+
 > [!NOTE]  
 > The PhoenixAI k8s operator was designed to be a level 2 operator.   See https://sdk.operatorframework.io/docs/overview/operator-capabilities/ to understand more about the capabilities of a level 2 operator.
 
@@ -61,11 +73,21 @@ You can choose to deploy the PhoenixAI Operator by using a default configuration
     namespace/phoenixai created
     serviceaccount/phoenixai created
     clusterrole.rbac.authorization.k8s.io/kube-anywhere-operator created
+    clusterrole.rbac.authorization.k8s.io/kube-anywhere-operator-pvc-expansion created
     clusterrolebinding.rbac.authorization.k8s.io/kube-anywhere-operator created
+    clusterrolebinding.rbac.authorization.k8s.io/kube-anywhere-operator-pvc-expansion created
     role.rbac.authorization.k8s.io/phoenixai-leader-election-role created
     rolebinding.rbac.authorization.k8s.io/phoenixai-leader-election-rolebinding created
+    service/kube-anywhere-operator-api created
     deployment.apps/kube-anywhere-operator created
     ```
+
+   Two of those are worth knowing by name. `kube-anywhere-operator-api` is the operator's gRPC API
+   Service on port 9090 — nothing else on this page uses it, but
+   [section 4](#4-install-the-anywhere-console) does, because that is what the Anywhere console
+   reads clusters through. The `kube-anywhere-operator-pvc-expansion` ClusterRole is what lets the
+   operator grow persistent volumes later; see
+   [Expand a persistent volume](../Operate/expand_persistent_volume_howto.md).
 
 2. **Deploy the PhoenixAI Operator by using a custom configuration file.** By default, the Operator is configured to
    install in the phoenixai namespace. To use the Operator in a custom namespace, download the Operator manifest and
@@ -88,8 +110,8 @@ You can choose to deploy the PhoenixAI Operator by using a default configuration
 
     ```bash
     $ kubectl -n phoenixai get pods
-    NAME                                  READY   STATUS    RESTARTS   AGE
-    phoenixai-controller-65bb8679-jkbtg   1/1     Running   0          5m6s
+    NAME                                      READY   STATUS    RESTARTS   AGE
+    kube-anywhere-operator-5499bc6d59-xdcpq   1/1     Running   0          5m6s
     ```
 
 ## 2. Deploy PhoenixAI Cluster
@@ -313,6 +335,83 @@ phoenixAICnSpec:
     configMapName: cn-config-map
     resolveKey: cn.conf
 ```
+
+## 4. Install the Anywhere console
+
+The PhoenixAI Anywhere console — the web UI for cluster inventory, health checks, monitoring,
+license and usage — is delivered **only as a Helm chart**. There are no standalone manifests to
+`kubectl apply`: the console's config Secret, StatefulSet, Services and RBAC are all rendered by
+the chart from your values.
+
+The console runs independently of how the operator was installed, so an operator and cluster
+deployed from the manifests above can still get the console. Two ways to add it:
+
+1. **Install the standalone `anywhere` chart with Helm (recommended).** The standalone chart
+   exists exactly for installing the console next to an operator that is managed separately:
+
+   ```bash
+   helm repo add phoenixai https://celerdata.github.io/phoenixai-kubernetes-operator
+   helm repo update phoenixai
+   helm install anywhere phoenixai/anywhere --namespace phoenixai -f console-values.yaml
+   ```
+
+   The settings to put in `console-values.yaml` are the `anywhere.*` values from
+   [Install with Helm, Step 3](./install_with_helm.md#step-3--set-the-root-password-and-write-your-values-file),
+   **without the `anywhere.` prefix**: on the standalone chart, `anywhere.operatorApiAddrs`
+   becomes `operatorApiAddrs`, `anywhere.dependencies.s3` becomes `dependencies.s3`, and so on.
+   The console reads clusters through the operator's gRPC API, which the `operator.yaml` from
+   [section 1](#12-deploy-phoenixai-operator) already enables — point `operatorApiAddrs` at the
+   `kube-anywhere-operator-api` Service it created. A working file is short:
+
+   ```yaml
+   # console-values.yaml
+   operatorApiAddrs:
+     - kube-anywhere-operator-api.phoenixai:9090
+
+   # Required. The console image is an enterprise build in a private registry, and the
+   # chart pulls it with no credentials unless you name a secret here. Without this the
+   # console pod sits in ImagePullBackOff.
+   imagePullSecrets:
+     - name: phoenixai-registry
+
+   # Required. Without a bucket the chart refuses to render at all, because the console
+   # keeps query profiles and support bundles in object storage.
+   dependencies:
+     s3:
+       bucket: <bucket>
+       region: <region>
+       accessKey: <access-key>
+       secretKey: <secret-key>
+
+   # Optional, but the default is admin/admin — set it now rather than after the console
+   # is reachable.
+   admin:
+     users:
+       admin: "<console-password>"
+   ```
+
+   `phoenixai-registry` is the pull secret; create it in the console's namespace if you do not
+   already have one there — see
+   [Install with Helm, Step 1](./install_with_helm.md#step-1--get-the-images-and-teach-kubernetes-to-pull-them)
+   for how to get the key file and turn it into a secret. Use whatever name you gave it.
+
+   If you deployed the operator into a namespace other than `phoenixai` — the custom
+   configuration file in [section 1.2](#12-deploy-phoenixai-operator) — use that namespace in
+   the address instead of `.phoenixai`.
+
+2. **Render the chart to YAML and apply it with kubectl.** If your rollout process only permits
+   applying manifests, use Helm as a client-side renderer — no Helm access to the Kubernetes
+   cluster is needed:
+
+   ```bash
+   helm template anywhere phoenixai/anywhere --namespace phoenixai -f console-values.yaml > console.yaml
+   kubectl apply -n phoenixai -f console.yaml
+   ```
+
+   Be aware of what this gives up: `helm template` records no release in the cluster, so
+   `helm upgrade`, `helm rollback` and `helm uninstall` will not work later. Every settings
+   change means re-rendering and re-applying, and removal means deleting the rendered objects
+   yourself. Prefer option 1 unless a policy rules it out.
 
 ## FAQ
 

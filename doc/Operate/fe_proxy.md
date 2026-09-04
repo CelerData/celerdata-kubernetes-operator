@@ -119,5 +119,5 @@ address — `Could not resolve host: <cluster>-cn-0.<cluster>-cn-search.<namespa
 
 The quick starts install the proxy and then use it to load two real datasets and query them:
 
-- [Quick start with Amazon S3](../QuickStart/quickstart_s3.md)
-- [Quick start with MinIO](../QuickStart/quickstart_minio.md)
+- [Quick start with Amazon S3](../GetStarted/quickstart_s3.md)
+- [Quick start with MinIO](../GetStarted/quickstart_minio.md)

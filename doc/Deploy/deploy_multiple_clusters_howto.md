@@ -1,6 +1,6 @@
 ---
-sidebar_position: 2
-sidebar_label: Deploy multiple clusters
+sidebar_label: Multiple clusters
+sidebar_position: 8
 ---
 
 # Deploy Multiple Clusters

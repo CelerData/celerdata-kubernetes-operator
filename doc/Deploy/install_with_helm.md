@@ -1,7 +1,7 @@
 ---
-title: Deploy PhoenixAI and the Anywhere console
-sidebar_label: Install PhoenixAI and the console
-sidebar_position: 1
+sidebar_label: Install with Helm
+sidebar_position: 3
+title: Install with Helm
 description: A complete, ordered install of the operator, a shared-data PhoenixAI cluster and the PhoenixAI Anywhere console with the kube-anywhere Helm chart — written so that no prior Kubernetes or Helm experience is assumed.
 ---
 
@@ -20,29 +20,22 @@ on". Every command can be copied as-is once you have filled in the values file i
 - the **PhoenixAI Anywhere console** in your browser, already showing that cluster.
 
 **How long it takes.** About 45 minutes of reading and typing the first time, of which roughly 10
-minutes is waiting for pods to start. Most of the elapsed time goes into Step 0 and Step 1 —
-collecting credentials from other people. Nothing here is undone by repeating it: a corrected
-values file is re-applied with the same command (`helm upgrade --install`).
+minutes is waiting for pods to start. Most of the elapsed time goes into gathering the
+prerequisites and Step 1 — collecting credentials from other people. Nothing here is undone by
+repeating it: a corrected values file is re-applied with the same command
+(`helm upgrade --install`).
 
 :::note Already comfortable with Kubernetes?
 If you want the fastest possible end-to-end install on a laptop instead, use
-[Quick start with Amazon S3](../QuickStart/quickstart_s3.md) or
-[Quick start with MinIO](../QuickStart/quickstart_minio.md). They cover the same ground in fewer
+[Quick start with Amazon S3](../GetStarted/quickstart_s3.md) or
+[Quick start with MinIO](../GetStarted/quickstart_minio.md). They cover the same ground in fewer
 words and assume you can fill in the gaps.
 :::
 
-## The five things you must have before you start
-
-Collect these first. Four of the five come from other people, so requesting them early is what
-decides whether this takes an afternoon or a week.
-
-| # | What | Who gives it to you |
-| --- | --- | --- |
-| 1 | A Kubernetes cluster you can reach with `kubectl`, and permission to create objects in it | your platform / Kubernetes administrator |
-| 2 | The name of a **StorageClass** that works in that cluster | the same administrator — Step 0 shows how to check it yourself |
-| 3 | **A key file for the PhoenixAI container image registry** | your PhoenixAI account team. This is the single most common reason a first install fails |
-| 4 | An **S3-compatible bucket**, its region, and an access key / secret key that can read and write it | your cloud or storage administrator |
-| 5 | `kubectl` and `helm` installed on your own machine | you |
+:::note Before you start
+[Prerequisites](./prerequisites.md) lists what you must have in hand and the five checks worth
+running first. This page assumes you have been through it.
+:::
 
 ## What you are installing
 
@@ -56,13 +49,20 @@ because these names show up in every later step.
 | **PhoenixAI Anywhere console** | The web UI: cluster inventory, health checks, monitoring, license and usage, support bundles, plus a per-cluster view for the people who write queries. |
 | **Warehouse** *(optional, later)* | An extra, separately scalable group of compute nodes. Not part of this page — see [Deploy a Warehouse](./deploy_warehouse_howto.md). |
 
+**How those map to charts.** `kube-anywhere` is a single chart wrapping three subcharts —
+`operator`, `phoenixai`, and `anywhere`, the console, which is included when you set
+`anywhere.enabled=true`. Installing `kube-anywhere` installs all of them, and uninstalling it
+removes what it installed. If you would rather manage the operator and the cluster on their own
+schedules, `operator` and `phoenixai` can be installed separately instead. Warehouses come from a
+chart of their own, `phoenixai/warehouse`. The chart has been split this way since v1.8.0.
+
 And the four words from Helm and Kubernetes that this page uses:
 
 | Word | Meaning here |
 | --- | --- |
 | **namespace** | A folder inside the Kubernetes cluster that keeps one installation's objects together. This page uses `phoenixai`. |
 | **pod** | One running container (or a small group of them). A coordinator is a pod; the console is a pod. |
-| **StorageClass** | The cluster's recipe for handing out disks. Coordinators, compute nodes and the console each ask for one. If the recipe does not work, pods sit in `Pending` forever, so Step 0 has you pick a working one. |
+| **StorageClass** | The cluster's recipe for handing out disks. Coordinators, compute nodes and the console each ask for one. If the recipe does not work, pods sit in `Pending` forever, so the [prerequisites](./prerequisites.md) have you pick a working one. |
 | **chart / values file / release** | A **chart** is a package (`kube-anywhere` is ours). A **values file** is your settings for it — one YAML file you keep and reuse. A **release** is one installation of a chart, under a name you pick. |
 
 :::caution Object names do not follow your release name
@@ -71,68 +71,21 @@ matter what you name the release. The prefix comes from the chart, not from your
 command. [Step 4](#step-4--install) has a table of every name, so you can always find things.
 :::
 
-## Step 0 — Check your environment
+## Decisions you cannot undo
 
-Five things to confirm before you start. Each takes seconds, and each one corresponds to a way the
-install fails later with a message that does not name the real cause.
+Four of the settings you write in [Step 3](#step-3--set-the-root-password-and-write-your-values-file)
+are fixed when the cluster is created. Changing any of them afterwards means building a new cluster
+and moving the data across, so they are worth deciding now rather than meeting later.
 
-**1. `kubectl` reaches the cluster, and the nodes are healthy.**
-
-```bash
-kubectl get nodes
-```
-
-Every node should say `Ready`. On a cluster that was just created, a node can report `NotReady` for
-the first minute while its networking starts — re-run the command until it turns `Ready` rather than
-reading it as a fault. If the command fails outright instead of printing nodes, your `kubectl` is not
-configured for the cluster yet — that is your administrator's side, not this page's.
-
-**2. Helm is installed and recent enough.**
-
-```bash
-helm version
-```
-
-Helm 3.8 or newer. If the command is not found, install Helm from
-[helm.sh](https://helm.sh/docs/intro/quickstart/).
-
-**3. Your `kubectl` has enough permission.**
-
-Installing creates a namespace, custom resource definitions, StatefulSets, Deployments, Services,
-Secrets, ConfigMaps, PersistentVolumeClaims, a ServiceAccount and its roles. A cluster administrator
-already has all of it. If you are working with a restricted account, hand your administrator
-[Least privilege to deploy](./least_permission_to_deploy_phoenixai_howto.md), which lists
-exactly what to grant.
-
-**4. Pick the StorageClass to use.**
-
-```bash
-kubectl get storageclass
-```
-
-Note the name — it goes into the values file as `<storage-class>`. A class marked `(default)` is the
-one Kubernetes uses when nothing asks for a class by name, but this page always names it explicitly,
-because an empty setting is *rejected* by PhoenixAI's configuration schema rather than silently
-defaulted.
-
-If the list is empty, stop here: no PhoenixAI pod can start, and the failure will show up later as
-pods stuck in `Pending`. Your administrator has to install a storage driver first — on managed
-Kubernetes this is usually a one-click add-on.
-
-**5. The cluster has room.** The values file in Step 3 requests roughly **2.5 CPU cores and 9 GiB
-of memory** in total, and allows bursting to about **9 cores and 18 GiB**:
-
-| Pods | Requests each | Limits each |
+| Decision | Written as | Why it is fixed |
 | --- | --- | --- |
-| 3 coordinators | 500m CPU / 2 GiB | 2 CPU / 4 GiB |
-| 1 compute node | 500m CPU / 2 GiB | 2 CPU / 4 GiB |
-| 1 operator | chart default | chart default |
-| 1 console | chart default | chart default |
+| **The database root password** | `initPassword` | The chart can set it on a first install only. A later `helm upgrade` cannot, so a cluster installed without one keeps an open `root` account until somebody changes it by hand. |
+| **The bucket, its region and path** | `phoenixAIFeSpec.config` | `cloud_native_storage_type` and the `aws_s3_*` settings are immutable coordinator configuration. A different bucket is a different cluster. |
+| **The StorageClass for the node disks** | `storageSpec.storageClassName` | A StatefulSet's volume claims cannot be edited after it is created. Disk *sizes* can still be grown later — but only if the class you pick sets `allowVolumeExpansion: true`, so this choice decides whether growing is possible at all. |
+| **Whether names are case-sensitive** | `phoenixAIFeSpec.config` | `enable_table_name_case_insensitive` is, in the product's own words, *"Only configurable during cluster initialization, immutable once set."* Left alone, catalog, database and table names are case-**sensitive**. |
 
-One large node is enough to start: this shape came up on a single 8-core / 32 GiB node with room to
-spare. Two or three worker nodes are still the better arrangement, because the three coordinators can
-then sit on different nodes and survive one of them failing. Requests that no node can satisfy appear
-as pods in `Pending` with an `Insufficient cpu` or `Insufficient memory` event.
+`run_mode = shared_data` is fixed at creation too, but it is not a decision: Anywhere operates
+elastic clusters only, so leave that line as Step 3 writes it.
 
 ## Step 1 — Get the images, and teach Kubernetes to pull them
 
@@ -140,7 +93,7 @@ The operator, coordinator, compute-node and console images are **enterprise buil
 registry**. Kubernetes therefore needs credentials, stored as a Kubernetes *secret*. Without them
 every pod fails with `ImagePullBackOff` — the most common first-install failure of all.
 
-**1. Request access.** Ask your PhoenixAI account team for access to the PhoenixAI container image
+**1. Request access.** Ask your [PhoenixAI team](https://www.phoenixdata.ai/contact-sales) for access to the PhoenixAI container image
 registry, and for the image versions that match your release. The images live in **Google Artifact
 Registry**, and access reaches you in one of two shapes. Ask which one you are getting — the answer
 decides whether you touch Google Cloud at all.
@@ -269,12 +222,42 @@ helm repo update phoenixai
 helm search repo phoenixai
 ```
 
-**If the list includes `phoenixai/kube-anywhere`**, you are done with this step — use the version that
-command prints, and install from the repository in Step 4.
+A repository that carries your release prints five charts — `kube-anywhere` and the subcharts it is
+built from:
+
+```text
+NAME                       CHART VERSION    APP VERSION  DESCRIPTION
+phoenixai/kube-anywhere    2.0.0            4.1-latest   kube-anywhere includes three subcharts, operato...
+phoenixai/operator         2.0.0            2.0.0        A Helm chart for PhoenixAI operator
+phoenixai/phoenixai        2.0.0            4.1-latest   A Helm chart for PhoenixAI cluster
+phoenixai/anywhere         2.0.0            v2.0.0       A Helm chart for PhoenixAI Anywhere — a read-on...
+phoenixai/warehouse        2.0.0            4.1-latest   Warehouse is currently a feature of the Phoenix...
+```
+
+The versions above are only an example. Use whichever your own command prints, and name them
+explicitly in Step 4 — that is what makes the install reproducible.
+
+**If the list includes `phoenixai/kube-anywhere`**, you are done with this step and you install from
+the repository in Step 4.
 
 **If it does not**, your release has not been published to that repository yet, and your account team
 gives you the chart as a package file (`kube-anywhere-<version>.tgz`) instead. Save it next to your
 values file; Step 4 shows the one line that differs.
+
+What each of those five is:
+
+| Chart | Installs |
+| --- | --- |
+| `phoenixai/kube-anywhere` | The operator and a cluster, plus the console when `anywhere.enabled=true`. What this page uses |
+| `phoenixai/operator` | The operator on its own |
+| `phoenixai/phoenixai` | A cluster on its own |
+| `phoenixai/anywhere` | The console on its own, alongside an operator you install and manage separately. It is the same chart `kube-anywhere` pulls in, so through `kube-anywhere` its values carry the `anywhere.` prefix and here they do not |
+| `phoenixai/warehouse` | A warehouse for an existing cluster |
+
+Every value each of them accepts is documented in a `README.md` that travels inside the chart, so
+you can read it without leaving the terminal: `helm show readme phoenixai/kube-anywhere` prints it,
+and `helm show values phoenixai/kube-anywhere` prints the annotated defaults. Both work for any of
+the five names above.
 
 :::caution Do not substitute a chart that merely looks similar
 The repository also carries older charts from the previous product generation, with names like
@@ -389,6 +372,9 @@ phoenixai:
       aws_s3_access_key = <access-key>
       aws_s3_secret_key = <secret-key>
       aws_s3_use_aws_sdk_default_behavior = false
+      # Catalog, database and table names are case-sensitive unless this is turned
+      # on, and it can only be set now — see "Decisions you cannot undo" above.
+      # enable_table_name_case_insensitive = true
 
   # Compute nodes (CN)
   phoenixAICnSpec:
@@ -460,7 +446,7 @@ anywhere:
 
 | Placeholder | Where it comes from |
 | --- | --- |
-| `<storage-class>` | `kubectl get storageclass`, in Step 0 |
+| `<storage-class>` | `kubectl get storageclass` — see [Prerequisites](./prerequisites.md) |
 | `<bucket>`, `<region>` | your bucket. The same bucket serves the cluster (`data/`) and the console (`anywhere/`); nothing else in it is touched |
 | `<access-key>`, `<secret-key>` | a key pair that can **read and write** that bucket |
 | `<operator-image-tag>`, `<database-image-tag>`, `<console-image-tag>` | the three versions your account team named — see the note below |
@@ -486,9 +472,12 @@ feature refuses to operate on it, and the mode cannot be switched afterwards —
 recreated. If you change nothing else in this file, keep that block.
 :::
 
-Monitoring pages need a Prometheus to query, which this page leaves out to keep the path short. See
-[Deploy Prometheus and Grafana](../Monitor/deploy-prometheus-grafana.md) and
-[Anywhere Console monitoring](../Monitor/anywhere-monitoring.md) when you want them.
+The `dependencies:` block above has a `prometheus:` section beside `s3:`, left out here to keep the
+path short. It is worth adding: until it is wired, the console's monitoring views stay empty and a
+support bundle's metrics snapshot comes back with no data — [Step 7](#step-7--what-to-set-up-next)
+says what else that costs. Adding it later is an edit to this same file and the Step 4 command
+again, not a reinstall. See [Deploy Prometheus and Grafana](../Monitor/deploy-prometheus-grafana.md)
+and [Anywhere Console monitoring](../Monitor/anywhere-monitoring.md).
 
 ## Step 4 — Install
 
@@ -684,8 +673,12 @@ the cluster the console speaks plain HTTP — and do not expose it to the public
   [Deploy a Warehouse](./deploy_warehouse_howto.md). Read its note about restarting the operator
   after the very first warehouse — without that the warehouse is never built, and nothing reports an
   error.
-- **Turn on monitoring**, so the console's monitoring pages have data:
-  [Deploy Prometheus and Grafana](../Monitor/deploy-prometheus-grafana.md), then
+- **Turn on monitoring.** Nothing breaks without a Prometheus wired to Anywhere — a deployment
+  that never has one is supported — but three things quietly stop working: the System Monitoring
+  charts and the pod-utilization view stay empty, every cluster carries a standing warning in its
+  health checks, and a support bundle's metrics snapshot comes back with no data in it. None of
+  that announces itself at the time, which is the reason to do it early rather than when you next
+  need a bundle. See [Deploy Prometheus and Grafana](../Monitor/deploy-prometheus-grafana.md), then
   [Anywhere Console monitoring](../Monitor/anywhere-monitoring.md).
 - **Turn on query insights.** Two switches, both in `my-values.yaml`: set
   `anywhere.queryHistory.enabled: true`, and add `enable_collect_query_detail_info = true` to the
@@ -806,6 +799,9 @@ No Prometheus is configured. See
 [Anywhere Console monitoring](../Monitor/anywhere-monitoring.md). The console also has an
 administrator dependency check that reports exactly which part of the wiring is missing.
 
+The same gap empties the pod-utilization view and the metrics snapshot in a support bundle, so fix
+it before collecting a bundle for anything performance-related.
+
 ### You lost the console password
 
 It cannot be read back in plain text anywhere else, but it can be replaced: edit the
@@ -834,8 +830,8 @@ are finished with the installation for good.
 
 ## Where to read next
 
-- [kube-anywhere chart reference](../../helm-charts/charts/kube-anywhere/README.md) — every value
-  the chart accepts.
+- `helm show readme phoenixai/kube-anywhere` and `helm show values phoenixai/kube-anywhere` — every
+  value the chart accepts, printed from the chart itself.
 - [Console tour](../GetStarted/anywhere_console_ui_guide.md) — what each console page is for.
 - [Deploy Multiple Clusters](./deploy_multiple_clusters_howto.md) — more than one cluster in one
   Kubernetes cluster.

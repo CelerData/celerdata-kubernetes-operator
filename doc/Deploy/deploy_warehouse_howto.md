@@ -1,5 +1,6 @@
 ---
-sidebar_position: 5
+sidebar_label: Warehouses
+sidebar_position: 7
 ---
 
 # Deploy Warehouse
@@ -11,8 +12,8 @@ how to deploy a warehouse.
 
 1. PhoenixAI Operator >= v1.9.0. The latest version of the operator is recommended.
 2. An installed PhoenixAI Cluster.
-   See [deploy_phoenixai_with_operator_howto.md](./deploy_phoenixai_with_operator_howto.md)
-   or [deploy_phoenixai_with_helm_howto.md](./deploy_phoenixai_with_helm_howto.md) for more details.
+   See [Install with kubectl](./install_with_kubectl.md)
+   or [Install with Helm](./install_with_helm.md) for more details.
 3. PhoenixAI enterprise version >= v3.2.0.
 
 ## 2. Deploy Warehouse

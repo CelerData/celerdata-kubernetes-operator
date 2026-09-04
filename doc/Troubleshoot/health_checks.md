@@ -3,7 +3,6 @@ title: Health checks
 sidebar_label: Health checks
 sidebar_position: 1
 description: What the health checks look for, how to read a finding, and where to see them.
-draft: true
 ---
 
 # Health checks
@@ -13,7 +12,7 @@ definitions and report settings likely to cause trouble later.
 
 They are not metrics: they report what is configured, not what is happening right now.
 
-Most checks read only those definitions. Three do not: two read licence state from the cluster, and
+Most checks read only those definitions. Three do not: two read license state from the cluster, and
 one reports on Anywhere's connection to Prometheus. These three can fail or be skipped when the
 cluster is unreachable, even if every other check passed.
 
