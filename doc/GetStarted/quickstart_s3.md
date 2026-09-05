@@ -20,7 +20,7 @@ For self-hosted or air-gapped object storage, see
 :::note New to Kubernetes or Helm?
 This page assumes you can fill in the gaps — it names commands without explaining what a pod, a
 StorageClass or a Helm release is. If that is not you, use
-[Deploy step by step](../Deploy/deploy_step_by_step_howto.md) instead: the same install, in order,
+[Deploy step by step](../Deploy/install_with_helm.md) instead: the same install, in order,
 with a check after every step and nothing assumed.
 :::
 
@@ -60,7 +60,7 @@ The operator, coordinator (FE), compute-node (CN) and console images are enterpr
 **private registry**, so Kubernetes needs credentials for it. Without them every pod fails with
 `ImagePullBackOff`.
 
-Ask your PhoenixAI account team for two things:
+Ask your [PhoenixAI team](https://www.phoenixdata.ai/contact-sales) for two things:
 
 1. **Access to the registry.** The images live in Google Artifact Registry, and access arrives either
    as a JSON key file they issue for you, or as a grant on a service account of your own that you
@@ -74,7 +74,7 @@ The pull secret is created in [Create the namespace and the pull secret](#create
 once the namespace exists. For the longer version — why Artifact Registry has no user name and
 password, how to use short-lived tokens instead, and how to mirror the images into a registry you
 already run — see
-[Deploy step by step, Step 1](../Deploy/deploy_step_by_step_howto.md#step-1--get-the-images-and-teach-kubernetes-to-pull-them).
+[Deploy step by step, Step 1](../Deploy/install_with_helm.md#step-1--get-the-images-and-teach-kubernetes-to-pull-them).
 
 ## The bucket
 

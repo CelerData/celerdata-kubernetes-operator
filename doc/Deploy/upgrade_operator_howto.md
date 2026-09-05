@@ -1,4 +1,5 @@
 ---
+sidebar_label: Upgrade the operator
 sidebar_position: 10
 ---
 
@@ -14,7 +15,7 @@ to a newer version. There are two paths, depending on how the operator was insta
 
 It is **not** a data-plane (FE/CN) upgrade. To upgrade the StarRocks/PhoenixAI engine images, see
 the "Upgrade PhoenixAI Cluster" section of
-[Deploy PhoenixAI With Operator](./deploy_phoenixai_with_operator_howto.md) and
+[Deploy PhoenixAI With Operator](./install_with_kubectl.md) and
 [Deploy Warehouse](./deploy_warehouse_howto.md) instead.
 
 The same procedure applies to the **community StarRocks operator** and the **PhoenixAI operator** —
@@ -31,12 +32,12 @@ they are the same chart family; only the names, registries, and values keys diff
 > Migrating from the community operator to PhoenixAI? PhoenixAI releases start at **v2.0.0**, whose
 > CR/CRD schema baseline is community **v1.11.5**. First upgrade the **community** operator to
 > v1.11.5 with this guide, confirm the cluster is healthy, then follow
-> [Migrating from the open-source StarRocks operator to PhoenixAI](../GetStarted/migrate-from-starrocks-howto.md).
+> [Migrating from the open-source StarRocks operator to PhoenixAI](../Deploy/migrate-from-starrocks-howto.md).
 >
 > Running a **CelerData-era enterprise** operator (`kube-celerdata` release or `celerdata.com/v1`
 > CRs, up to v1.11.5)? The same applies: there is **no in-place `helm upgrade`** to v2.0.0 — the
 > chart, CRD group, and kinds were all renamed. Follow the same
-> [migration guide](../GetStarted/migrate-from-starrocks-howto.md); its converter auto-detects CelerData-era
+> [migration guide](../Deploy/migrate-from-starrocks-howto.md); its converter auto-detects CelerData-era
 > input, and your data and cluster identity are preserved.
 
 ## What an operator upgrade does (and does not do)
@@ -83,7 +84,7 @@ VERSION=2.0.0
 #    `apply` copies the whole object into the kubectl.kubernetes.io/last-applied-configuration
 #    annotation, which cannot exceed 262144 bytes. The PhoenixAICluster CRD is ~242 KB — under the
 #    limit, but with less than 8% to spare, and only because these CRDs are generated with field
-#    descriptions stripped (see the FAQ in deploy_phoenixai_with_operator_howto.md). `replace` does
+#    descriptions stripped (see the FAQ in install_with_kubectl.md). `replace` does
 #    not write that annotation, so it never depends on that margin. The CRDs already exist on an
 #    upgrade, so `replace` fits.
 kubectl replace \
@@ -122,7 +123,7 @@ helm repo update phoenixai            # or: helm repo update starrocks-community
 # 1. Replace the CRDs (helm upgrade does NOT touch CRDs from a chart's crds/ directory). Use `replace`,
 #    not `apply` — `apply` copies the whole object into the 262144-byte
 #    kubectl.kubernetes.io/last-applied-configuration annotation, and the PhoenixAICluster CRD sits
-#    at ~242 KB against that limit (see the FAQ in deploy_phoenixai_with_operator_howto.md).
+#    at ~242 KB against that limit (see the FAQ in install_with_kubectl.md).
 #    `replace` does not write that annotation. The CRDs already exist, so `replace` fits.
 kubectl replace \
   -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml \
@@ -146,4 +147,4 @@ kubectl -n "$OPNS" rollout status deploy/"$OP"                                  
 ```
 
 An operator upgrade does not change cluster membership. Confirm the data plane the same way as in the
-migration guide's [Verify](../GetStarted/migrate-from-starrocks-howto.md#verify-both-paths) section (`SHOW FRONTENDS` / `SHOW BACKENDS` show the same nodes `Alive = true`).
+migration guide's [Verify](../Deploy/migrate-from-starrocks-howto.md#verify-both-paths) section (`SHOW FRONTENDS` / `SHOW BACKENDS` show the same nodes `Alive = true`).

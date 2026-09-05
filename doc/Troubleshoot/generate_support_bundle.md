@@ -3,7 +3,6 @@ title: Generating a support bundle
 sidebar_label: Generating a bundle
 sidebar_position: 3
 description: What a support bundle collects, how to scope one, and what is and is not masked before you send it on.
-draft: true
 ---
 
 # Generating a support bundle
@@ -46,7 +45,9 @@ A bundle can include, among other things:
   of collection
 - **Query audit analysis** — failed statements, and the heaviest queries in the window
 - **Crash context and memory diagnostics** — evidence for one specific class of failure
-- **Metrics snapshot** — the monitoring window, so support sees the same charts you do
+- **Metrics snapshot** — the monitoring window, so support sees the same charts you do. It comes
+  back empty if no Prometheus is wired to Anywhere, and nothing in the bundle says so — check
+  the console's monitoring pages before collecting a bundle for anything performance-related
 
 <!-- DOC NOTE: this list is an API contract, not a description of the console -- it comes from
      bundleCategories in the backend, served through bundle-options. Keep it in sync when an

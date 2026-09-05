@@ -1,4 +1,5 @@
 ---
+sidebar_label: License a cluster
 sidebar_position: 9
 ---
 
@@ -43,7 +44,7 @@ The cluster will return the system information. For example:
 
 ## Step 2. Obtain license file
 
-Obtain the license file for your cluster by contacting the PhoenixAI Support team and sending them the system information you acquired earlier.
+Obtain the license file for your cluster by contacting the [PhoenixAI team](https://www.phoenixdata.ai/contact-sales) and sending them the system information you acquired earlier.
 
 The team will then grant you the license file (`license.txt`).
 

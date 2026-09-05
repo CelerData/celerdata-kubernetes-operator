@@ -58,7 +58,7 @@ There are two ways to install Operator and PhoenixAI Cluster.
 
 ## Installation by yaml Manifest
 
-Please see [Deploy PhoenixAI With Operator](./doc/Deploy/deploy_phoenixai_with_operator_howto.md) document for more details.
+Please see [Deploy PhoenixAI With Operator](./doc/Deploy/install_with_kubectl.md) document for more details.
 
 ### 1. Apply the PhoenixAICluster CRD
 
@@ -127,7 +127,7 @@ spec:
       memory: 8Gi
 ---
 # The FE config that turns on shared-data mode. Fill in your shared storage (S3, MinIO, ...)
-# settings here; see doc/QuickStart/quickstart_s3.md for a complete example.
+# settings here; see doc/GetStarted/quickstart_s3.md for a complete example.
 apiVersion: v1
 kind: ConfigMap
 metadata:

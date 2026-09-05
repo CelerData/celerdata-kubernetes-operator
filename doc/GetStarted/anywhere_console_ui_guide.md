@@ -1,7 +1,7 @@
 ---
 title: Console tour
 sidebar_label: Console tour
-sidebar_position: 1
+sidebar_position: 3
 description: What each page of the two PhoenixAI Anywhere consoles shows, who can reach it, and the path it lives at.
 ---
 

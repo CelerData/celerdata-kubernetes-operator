@@ -3,7 +3,6 @@ title: Reading a support bundle
 sidebar_label: Reading a bundle
 sidebar_position: 4
 description: The five metadata files at the root of a bundle, what each answers, and the order to read them in.
-draft: true
 ---
 
 # Reading a support bundle

@@ -10,7 +10,7 @@ This guide delineates the process to establish a root password when a new instal
 - Ensure that you have installed the Kubernetes cluster. v1.23.0+ is recommended.
 - Ensure that you have installed the [Helm](https://helm.sh/) package manager. 3.0.0+ is recommended.
 - Ensure the helm chart repo for PhoenixAI is added.
-  See [Add the Helm Chart Repo for PhoenixAI](../GetStarted/add_helm_repo_howto.md).
+  See [Step 2 — Get the chart](../Deploy/install_with_helm.md#step-2--get-the-chart).
 
 In this guide, we will use `phoenixai/kube-anywhere` chart to deploy both PhoenixAI operator and cluster.
 

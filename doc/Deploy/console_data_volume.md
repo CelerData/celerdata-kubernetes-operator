@@ -1,14 +1,14 @@
 ---
-title: The Anywhere data volume
-sidebar_label: The Anywhere data volume
-description: What Anywhere keeps on its own persistent volume, why it outlives an uninstall, and how to size it.
-sidebar_position: 7
-draft: true
+sidebar_label: Console data volume
+sidebar_position: 6
+title: The console data volume
+description: What the Anywhere console keeps on its own persistent volume, why it outlives an uninstall, and how to size it.
 ---
 
-# The Anywhere data volume
+# The console data volume
 
-Anywhere keeps its own state on a persistent volume, separate from any cluster it manages.
+The Anywhere console keeps its own state on a persistent volume of its own, separate from any
+cluster it manages and from the disks those clusters run on.
 [Back up and restore](../administration/management/Backup_and_restore.md) covers the data in a
 PhoenixAI cluster. It does not cover this volume.
 
