@@ -41,19 +41,22 @@ page.
 
 It includes the following main steps:
 
-1. Apply PhoenixAICluster CRD.
+1. Apply the PhoenixAI CRDs.
 2. Deploy PhoenixAI Operator.
 
-### 1.1. Apply PhoenixAICluster CRD
+### 1.1. Apply the PhoenixAI CRDs
 
-PhoenixAICluster CRD is a custom resource definition (CRD) that defines the PhoenixAI cluster. It is used to create and
-manage PhoenixAI clusters by using the PhoenixAI Operator. Please refer to [api.md](../api.md) for the detailed
-description of the PhoenixAICluster CRD.
+PhoenixAICluster and PhoenixAIWarehouse are the custom resource definitions (CRDs) that define a PhoenixAI cluster and
+an additional compute warehouse. They are used to create and manage those objects by using the PhoenixAI Operator.
+Please refer to [api.md](../api.md) for their detailed description.
 
-Apply the PhoenixAICluster CRD by using the following command:
+Apply **both** CRDs before you deploy the operator. The operator decides whether to run the warehouse controller once,
+at startup, so a warehouse CRD applied later is ignored until the operator is restarted — applying both now avoids
+that. Installing the warehouse CRD costs nothing if you never create a warehouse.
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/celerdata/phoenixai-kubernetes-operator/main/deploy/phoenixdata.ai_phoenixaiclusters.yaml
+kubectl apply -f https://raw.githubusercontent.com/celerdata/phoenixai-kubernetes-operator/main/deploy/phoenixdata.ai_phoenixaiwarehouses.yaml
 ```
 
 ### 1.2. Deploy PhoenixAI Operator

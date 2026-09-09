@@ -9,8 +9,8 @@ description: What the Anywhere console keeps on its own persistent volume, why i
 
 The Anywhere console keeps its own state on a persistent volume of its own, separate from any
 cluster it manages and from the disks those clusters run on.
-[Back up and restore](../administration/management/Backup_and_restore.md) covers the data in a
-PhoenixAI cluster. It does not cover this volume.
+Backup and restore, in the PhoenixAI Database documentation, covers the data in a PhoenixAI
+cluster. It does not cover this volume.
 
 ## What is on it
 
@@ -29,9 +29,36 @@ and would need re-creating if the volume were lost.
 
 ## It survives an uninstall
 
-The volume is retained deliberately, so removing the release does not discard billing history. Its
-name derives from the release name, so reinstalling under that same name reclaims it. Setting
+The volume is retained deliberately, so removing the release does not discard billing history.
+
+Its name comes from the **chart**, not from your release name: `data-<anywhere.nameOverride>-0`,
+which is `data-kube-anywhere-console-0` unless you override `anywhere.nameOverride`. Reinstalling
+into the same namespace therefore reclaims it whatever you call the release. Setting
 `persistence.existingClaim` points Anywhere at a volume you name yourself instead.
+
+:::caution Reinstalling under a *different* release name needs `--take-ownership`
+The claim is declared by the chart, so it carries Helm's ownership annotations from the release that
+created it. Installing a release with a new name into a namespace that already holds the claim is
+rejected before anything is applied:
+
+```text
+Error: unable to continue with install: PersistentVolumeClaim "data-kube-anywhere-console-0"
+in namespace "phoenixai" exists and cannot be imported into the current release:
+invalid ownership metadata; annotation validation error:
+key "meta.helm.sh/release-name" must equal "kube-anywhere": current value is "phoenixai"
+```
+
+An installation made under an earlier release name — `phoenixai`, say — hits this the first time it
+is reinstalled under the release name the current documentation uses, `kube-anywhere`. Hand the
+existing claim to the new release:
+
+```bash
+helm upgrade --install kube-anywhere phoenixai/kube-anywhere \
+  --namespace phoenixai -f my-values.yaml --take-ownership
+```
+
+Keeping the old release name works just as well, and changes nothing about the object names.
+:::
 
 ## Sizing
 

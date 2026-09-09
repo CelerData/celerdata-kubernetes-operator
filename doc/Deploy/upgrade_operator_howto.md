@@ -85,11 +85,16 @@ VERSION=2.0.0
 #    annotation, which cannot exceed 262144 bytes. The PhoenixAICluster CRD is ~242 KB — under the
 #    limit, but with less than 8% to spare, and only because these CRDs are generated with field
 #    descriptions stripped (see the FAQ in install_with_kubectl.md). `replace` does
-#    not write that annotation, so it never depends on that margin. The CRDs already exist on an
-#    upgrade, so `replace` fits.
-kubectl replace \
-  -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml \
-  -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml
+#    not write that annotation, so it never depends on that margin. The cluster CRD always exists
+#    on an upgrade, so `replace` fits.
+kubectl replace -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml
+
+#    The warehouse CRD is the exception: operator charts only began shipping it in v2.0.0, and
+#    `helm upgrade` never installs a chart's crds/, so on an operator upgraded from an earlier
+#    version it does not exist yet and `replace` alone fails with NotFound. `create` first, fall
+#    back to `replace`. At ~114 KB it is well clear of the annotation limit either way.
+kubectl create -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml 2>/dev/null \
+  || kubectl replace -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml
 
 # 2. Update the operator image (container name is `manager`).
 kubectl -n "$OPNS" set image deploy/"$OP" \
@@ -124,10 +129,15 @@ helm repo update phoenixai            # or: helm repo update starrocks-community
 #    not `apply` — `apply` copies the whole object into the 262144-byte
 #    kubectl.kubernetes.io/last-applied-configuration annotation, and the PhoenixAICluster CRD sits
 #    at ~242 KB against that limit (see the FAQ in install_with_kubectl.md).
-#    `replace` does not write that annotation. The CRDs already exist, so `replace` fits.
-kubectl replace \
-  -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml \
-  -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml
+#    `replace` does not write that annotation. The cluster CRD already exists, so `replace` fits.
+kubectl replace -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiclusters.yaml
+
+#    The warehouse CRD is the exception: operator charts only began shipping it in v2.0.0, and
+#    `helm upgrade` never installs a chart's crds/, so on an operator upgraded from an earlier
+#    version it does not exist yet and `replace` alone fails with NotFound. `create` first, fall
+#    back to `replace`. At ~114 KB it is well clear of the annotation limit either way.
+kubectl create -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml 2>/dev/null \
+  || kubectl replace -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v2.0.0/phoenixdata.ai_phoenixaiwarehouses.yaml
 
 # 2. helm upgrade to the new chart version, re-passing the same values file you installed with
 #    (use the chart you installed: kube-anywhere for combined, operator for the subchart).
