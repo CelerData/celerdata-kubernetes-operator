@@ -15,6 +15,41 @@ how to deploy a warehouse.
    See [Install with kubectl](./install_with_kubectl.md)
    or [Install with Helm](./install_with_helm.md) for more details.
 3. PhoenixAI enterprise version >= v3.2.0.
+4. The `PhoenixAIWarehouse` CRD, present **before the operator started**. A fresh installation of
+   the current charts satisfies this on its own: the operator chart ships the CRD next to the
+   cluster one, and [Install with kubectl](./install_with_kubectl.md) applies both in step 1.1. No
+   operator restart is needed there.
+
+   :::caution An upgraded or older operator will not have it
+   Operator charts only began shipping the warehouse CRD in v2.0.0, and **`helm upgrade` never
+   installs a chart's `crds/` directory** — so an operator upgraded from an earlier version does not
+   gain the CRD from the chart, whatever version it now runs. The same holds for an operator
+   installed with `--skip-crds`, or from a manifest that applied only the cluster CRD.
+
+   Check rather than assume:
+
+   ```bash
+   kubectl get crd phoenixaiwarehouses.phoenixdata.ai
+   kubectl -n phoenixai logs deployment/kube-anywhere-operator | grep PhoenixAIWarehouse
+   ```
+
+   The operator decides whether to run the warehouse controller **once, at startup**. If it started
+   without the CRD, warehouses are never reconciled and nothing reports it: `kubectl get paw` shows
+   the object with an empty `STATUS`, there are no pods and no events, and the `grep` above returns
+   nothing. Install the CRD, then restart the operator:
+
+   ```bash
+   kubectl apply -f https://raw.githubusercontent.com/celerdata/phoenixai-kubernetes-operator/main/deploy/phoenixdata.ai_phoenixaiwarehouses.yaml
+   kubectl -n phoenixai rollout restart deployment kube-anywhere-operator
+   ```
+
+   The `grep` then reports `Starting Controller`.
+
+   The warehouse chart does **not** carry the CRD — only the operator chart does, because that is
+   the one installed early enough for the operator to see it. So a warehouse chart installed against
+   an operator that lacks the CRD fails outright with `no matches for kind "PhoenixAIWarehouse"`,
+   rather than appearing to succeed and then never producing pods.
+   :::
 
 ## 2. Deploy Warehouse
 
@@ -28,17 +63,7 @@ You can choose one of the following methods to deploy a warehouse:
 
 ### 2.1 Deploy Warehouse by YAML Manifest
 
-First, we need to install PhoenixAIWarehouse CRD and restart the PhoenixAI operator to make it aware of the new CRD.
-
-```console
-# install crd
-kubectl apply -f https://github.com/CelerData/phoenixai-kubernetes-operator/releases/download/v1.9.6/phoenixdata.ai_phoenixaiwarehouses.yaml
-
-# restart operator
-kubectl rollout restart deployment kube-anywhere-operator
-```
-
-Then, we need to deploy a warehouse by the following YAML manifest.
+Deploy a warehouse by the following YAML manifest.
 
 ```yaml
 # wh1.yaml
@@ -57,7 +82,7 @@ spec:
     envVars:
       - name: TZ
         value: UTC
-    image: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu:4.1.3-ee
+    image: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu:4.1-latest
     replicas: 1
     limits:
       cpu: 8
@@ -94,7 +119,7 @@ spec:
   replicas: 1
   image:
     repository: us-west1-docker.pkg.dev/phoenix-ai-images/enterprise/cn-ubuntu
-    tag: "4.1.3-ee"
+    tag: "4.1-latest"
   resources:
     limits:
       cpu: 8
@@ -109,10 +134,41 @@ Then deploy a warehouse by the following command:
 ```console
 # Use the above values.yaml to deploy a warehouse in namespace phoenixai
 helm -n phoenixai install wh1 phoenixai/warehouse -f wh1-values.yaml
-
-# Restart the PhoenixAI operator to make it aware of the new CRD
-kubectl -n phoenixai rollout restart deployment kube-anywhere-operator
 ```
+
+### 2.3 Give the warehouse the cluster's root password
+
+A warehouse's compute nodes register themselves in the cluster's coordinator over SQL as `root`. If
+the cluster was installed with a root password, they need it, and **the warehouse chart does not
+inherit the cluster chart's `initPassword` setting** — there is no warehouse value for it. Without
+the password the compute node loops on:
+
+```text
+[...] Add myself (wh1-warehouse-cn-0...:9050) into FE ...
+ERROR 1045 (28000): Access denied for user 'root' (using password: NO)
+```
+
+and the pod never becomes ready. Pass the password as an environment variable instead. Point it at
+the same Secret the cluster used, so there is one copy of the password:
+
+```yaml
+# wh1-values.yaml
+spec:
+  # ... the rest of your warehouse values ...
+  envVars:
+    - name: MYSQL_PWD
+      valueFrom:
+        secretKeyRef:
+          # The Secret named by phoenixai.initPassword.passwordSecret when the cluster
+          # was installed.
+          name: phoenixai-root-password
+          key: password
+```
+
+Clusters whose `root` has no password need none of this — leave `envVars` unset.
+
+If a warehouse is already stuck in this state, adding the block above and re-running
+`helm upgrade` is enough; the compute node registers within seconds of restarting.
 
 ## 3. Manage Warehouse
 

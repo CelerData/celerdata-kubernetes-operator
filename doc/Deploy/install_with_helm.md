@@ -526,8 +526,11 @@ That pod is the one-off job that sets the root password from Step 3. It starts i
 coordinators are still booting, so its first attempts cannot connect and it shows `Error` with a
 climbing restart count for a minute or two. That is the retry working, not a failure. It ends as
 `Completed` — the run above took four attempts — and `kubectl -n phoenixai get job` then reports
-`Complete 1/1`. A pod stuck in `Error` long after the coordinators are `Running` is worth reading:
-`kubectl -n phoenixai logs job/kube-anywhere-initpwd`.
+`COMPLETIONS 1/1`.
+
+Let it get that far before you re-run the command above. The job belongs to this install only, so an
+upgrade started while it is still retrying removes it and the password is never set — see
+[the compute node never joins](#the-compute-node-never-joins) if that happens.
 :::
 
 Anything not `Running` after a few minutes has a reason worth reading rather than waiting out:
@@ -586,15 +589,18 @@ Three things to confirm:
   `run_mode` block did not take effect — see
   [the console lists the cluster but every page says it is not supported](#the-console-lists-the-cluster-but-every-page-says-it-is-not-supported).
 
-:::note Why that command also works if you forget the password
-A connection made *inside* a coordinator's container over `127.0.0.1` is exempt from the root
-password — `SELECT user()` there reports `'root'@'127.0.0.1'`. Succeeding here is therefore not proof
-that Step 3 took effect, and dropping the `-p` shows nothing unusual.
+:::note If that command works with no password at all, Step 3 did not take effect
+`root` is authenticated the same way over `127.0.0.1` inside a coordinator as it is over the
+cluster's Service — there is no loopback exemption. With a password set, dropping the `-p` is refused
+on both:
 
-The password is enforced on every path that arrives from outside that container. To see it, connect
-through the cluster's Service from anywhere else: with no password the answer is
-`ERROR 1045 (28000): Access denied for user 'root' (using password: NO)`, and a wrong password is
-refused the same way.
+```text
+ERROR 1045 (28000): Access denied for user 'root' (using password: NO)
+```
+
+So if you *can* connect with no password, the password from Step 3 was never applied: `root` is open
+to anything on the cluster network, and compute nodes cannot register either.
+[The compute node never joins](#the-compute-node-never-joins) has the check and the fix.
 :::
 
 ## Step 6 — Open the console
@@ -634,16 +640,28 @@ Replace it now, before you put an Ingress or a load balancer in front of the con
 administrator session is what gates the console's most sensitive actions, so treat this as the last
 required step of the install rather than as hardening you will get to later.
 
+**Set it in `my-values.yaml`, not with `kubectl`.** The chart renders this Secret from
+`anywhere.admin.users` on every install *and every upgrade*, so a password written straight into the
+Secret is put back to the chart's value the next time you run the Step 4 command:
+
+```yaml
+anywhere:
+  admin:
+    users:
+      admin: "<a long random password>"
+```
+
+Then re-run the Step 4 command. To keep passwords out of the values file altogether, point
+`anywhere.admin.existingSecret` at a Secret you manage yourself and the chart renders none.
+
+Patching the Secret directly takes effect within about a minute, which is useful for locking the
+console down right now — but follow it with the values change above, or the next upgrade restores
+the well-known default:
+
 ```bash
 kubectl -n phoenixai patch secret kube-anywhere-console-admin \
   --type merge -p "{\"stringData\":{\"admin\":\"$(openssl rand -base64 24)\"}}"
-kubectl -n phoenixai get secret kube-anywhere-console-admin \
-  -o jsonpath='{.data.admin}' | base64 -d; echo
 ```
-
-The new password works within about a minute, with no restart. You can also pick your own accounts
-at install time with `anywhere.admin.users`, or point the chart at a Secret you manage yourself with
-`anywhere.admin.existingSecret`.
 :::
 
 Accounts live in that one Secret — one entry per user name. Add, remove or rotate them by editing
@@ -652,6 +670,9 @@ it; changes take effect within about a minute and need no restart:
 ```bash
 kubectl -n phoenixai edit secret kube-anywhere-console-admin
 ```
+
+Mirror anything you want to keep in `anywhere.admin.users`, or the next `helm upgrade` re-renders it
+away.
 
 There is a second sign-in page, for the people who **query** the cluster rather than operate it, at
 **http://localhost:8090/cluster-console/login**. It takes a database user of the cluster itself —
@@ -670,9 +691,11 @@ the cluster the console speaks plain HTTP — and do not expose it to the public
 - **Register your license.** The console's health checks report a cluster that has no valid
   PhoenixAI Database license, so do this before judging a red result.
 - **Add a warehouse**, if you want compute you can scale on its own:
-  [Deploy a Warehouse](./deploy_warehouse_howto.md). Read its note about restarting the operator
-  after the very first warehouse — without that the warehouse is never built, and nothing reports an
-  error.
+  [Deploy a Warehouse](./deploy_warehouse_howto.md). The `PhoenixAIWarehouse` CRD ships with the
+  operator chart you just installed, so no operator restart is involved. If you set a root
+  password in Step 3, the warehouse needs it too: its compute nodes register themselves as `root`,
+  and the warehouse chart does not inherit the cluster's `initPassword` setting. That guide's
+  section on giving the warehouse the cluster's root password has the three lines to add.
 - **Turn on monitoring.** Nothing breaks without a Prometheus wired to Anywhere — a deployment
   that never has one is supported — but three things quietly stop working: the System Monitoring
   charts and the pod-utilization view stay empty, every cluster carries a standing warning in its
@@ -722,6 +745,52 @@ two causes:
   has no working storage driver, which your administrator has to install.
 - **`Insufficient cpu` / `Insufficient memory`** — no node has room. Lower `replicas` or the
   `requests` in your values file, or add capacity.
+
+### The compute node never joins
+
+```bash
+kubectl -n phoenixai logs kube-anywhere-cn-0 | tail -20
+```
+
+```text
+[...] Add myself (kube-anywhere-cn-0...:9050) into FE ...
+ERROR 1045 (28000): Access denied for user 'root' (using password: YES)
+```
+
+A compute node registers itself in a coordinator over SQL as `root`, with the password from Step 3.
+`using password: YES` rarely means the password in your values file is wrong. It usually means the
+password was never applied to the cluster, so the coordinator still expects no password at all.
+
+That is what happens when the `kube-anywhere-initpwd` job never finished. The job belongs to the
+install that created it and nothing recreates it, so an upgrade started while it was still retrying
+removes it — re-running the Step 4 command a minute after installing is enough to lose it. `root` is
+then left open **and** the compute nodes cannot join.
+
+Confirm it by connecting as `root` with no password at all:
+
+```bash
+kubectl -n phoenixai exec kube-anywhere-fe-0 -- env MYSQL_PWD= \
+  mysql -hkube-anywhere-fe-service -P9030 -uroot -e "SELECT user();"
+```
+
+If that **succeeds**, set the password by hand — the compute node registers within seconds:
+
+```bash
+kubectl -n phoenixai exec kube-anywhere-fe-0 -- env MYSQL_PWD= \
+  mysql -h127.0.0.1 -P9030 -uroot -e "SET PASSWORD FOR 'root' = PASSWORD('<root-password>');"
+```
+
+Use the password your values file already points at, so the two agree;
+[Change Root Password](../Configure/change_root_password_howto.md) covers the standing procedure.
+
+If the connection is instead **refused**, the password is set and the mismatch is elsewhere: check
+that the Secret named by `phoenixai.initPassword.passwordSecret` holds the password you think it does.
+
+:::note `COMPLETIONS 1/1` does not always mean the same thing
+On a first install it means the password was set. On a reinstall over volumes that already hold a
+cluster whose `root` has a password, the job cannot authenticate, treats that as already done and
+exits successfully — so `1/1` there means "assumed already set", not "verified".
+:::
 
 ### The console pod restarts over and over (`CrashLoopBackOff`)
 
@@ -781,6 +850,49 @@ helm upgrade --install kube-anywhere phoenixai/kube-anywhere \
 Do this only when you know the existing definitions come from the same release version. If they are
 older, upgrade them deliberately first — see
 [Upgrade the Operator](./upgrade_operator_howto.md).
+
+### `helm upgrade` fails on a field-manager conflict in a workload (Helm 4)
+
+Helm 4 applies changes server-side by default (`--server-side=auto`), so an object that something
+else edited in place is reported as a conflict rather than silently overwritten. Any chart-managed
+object touched with `kubectl set image`, `kubectl patch` or `kubectl edit` fails the next upgrade:
+
+```text
+Apply failed with 1 conflict: conflict with "kubectl-set" using apps/v1:
+.spec.template.spec.containers[name="anywhere"].image
+```
+
+This is the workload version of the CRD conflict above. `kubectl -n phoenixai get statefulset
+kube-anywhere-console -o yaml --show-managed-fields` names every manager that owns a field. Let the
+chart win — `my-values.yaml` is the source of truth for these objects:
+
+```bash
+helm upgrade --install kube-anywhere phoenixai/kube-anywhere \
+  --namespace phoenixai -f my-values.yaml --force-conflicts
+```
+
+Then make the change through `my-values.yaml` instead of with `kubectl`, or the next upgrade hits
+the same wall.
+
+Helm 3 applies client-side and does not reach this failure — nor does it have `--force-conflicts`.
+If you are on Helm 3, a hot-edited field is silently overwritten by the next upgrade instead, which
+is its own reason to keep changes in the values file.
+
+### The install is rejected with "invalid ownership metadata"
+
+An object that survives an uninstall — the coordinators' metadata volumes, and the console's
+`data-kube-anywhere-console-0` — still carries the Helm annotations of the release that created it,
+and object names come from the chart rather than from the release name. So reinstalling under a
+*different* release name is refused:
+
+```text
+invalid ownership metadata; annotation validation error:
+key "meta.helm.sh/release-name" must equal "kube-anywhere": current value is "phoenixai"
+```
+
+Either keep the original release name, or hand the existing objects to the new release by adding
+`--take-ownership` to the Step 4 command. See
+[The console data volume](./console_data_volume.md#it-survives-an-uninstall).
 
 ### A second install into the same Kubernetes cluster fails with "already exists"
 

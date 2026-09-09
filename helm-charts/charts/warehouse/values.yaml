@@ -102,6 +102,20 @@ spec:
   # You specify this manually like you would a raw deployment manifest.
   # This means you can bind in environment variables from secrets.
   # Ref: https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
+  #
+  # MYSQL_PWD is the one entry most warehouses need. A warehouse's compute nodes register themselves
+  # in the cluster's FE over SQL as `root`, and this chart has no `initPassword` value of its own to
+  # inherit the cluster's root password from. So on a cluster whose root HAS a password, set it here
+  # or the compute node loops on `ERROR 1045 (28000): Access denied for user 'root'
+  # (using password: NO)` and never becomes ready. Point it at the same Secret the cluster chart used
+  # (phoenixai.initPassword.passwordSecret) so there is only one copy of the password:
+  #   envVars:
+  #     - name: MYSQL_PWD
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: phoenixai-root-password
+  #           key: password
+  # Clusters whose root has no password need none of this - leave envVars unset.
   envVars: []
     # e.g. static environment variable:
     # - name: DEMO_GREETING

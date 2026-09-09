@@ -297,6 +297,11 @@ license:
 #                                                   longest-valid one expires within license.expiryWarnWindow
 #   prometheus-dependency-unusable        warning   no Prometheus dependency configured, or anywhere cannot read this
 #                                                   cluster's metrics through it (same checks as the Dependencies page)
+#   fe-pod-not-ready                      critical  an FE Pod is missing, not Running or not ready (e.g. CrashLoopBackOff);
+#                                                   read from the Pods themselves, since the CR status reports a
+#                                                   crash-looping Pod as reconciling
+#   cn-pod-not-ready                      warning   a CN Pod (the cluster's own or a warehouse's) is missing, not Running
+#                                                   or not ready
 inspection:
   # Non-empty = allowlist: only these rule ids run.
   enabledRules: []

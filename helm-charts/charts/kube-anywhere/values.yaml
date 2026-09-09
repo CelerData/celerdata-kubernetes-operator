@@ -722,12 +722,24 @@ phoenixai:
     # Note: This field takes effect only when podManagementPolicy is set to OrderedReady.
     minReadySeconds: 0
     # podManagementPolicy controls how pods are created during initial scale up, when replacing pods on nodes, or when scaling down.
-    # The default policy is OrderedReady, the same as statefulset's default policy, so FE pods are created/removed one by
-    # one in order instead of in parallel.
+    # The default policy is Parallel, which is NOT statefulset's own default (OrderedReady): all FE pods are created and
+    # removed at the same time. This also matches the operator's built-in default when the field is left empty.
+    #
+    # Why not OrderedReady: it creates fe-<n+1> only after fe-<n> has passed its readiness probe, and an FE only becomes
+    # ready (/api/health) once the FE cluster has elected a leader. That deadlocks every cold start of a multi-replica FE
+    # whose metadata already exists while no FE is running - reinstalling the chart on top of retained PVCs, rebooting a
+    # single-node cluster, evicting all FE pods, or scaling the statefulset to 0 and back. fe-0 starts as a FOLLOWER,
+    # cannot reach quorum alone, so it never turns ready, so fe-1 is never created, and the two wait on each other
+    # forever. Because podManagementPolicy is immutable and the operator keeps whatever value the live statefulset
+    # already has, changing this value and re-running `helm upgrade` does NOT break the deadlock - the only way out is to
+    # delete the FE statefulset by hand.
+    # The trade-off accepted here: with Parallel, a scale up/down of FE adds or removes replicas all at once instead of
+    # one at a time, so scale FE in steps that keep a quorum of the remaining followers alive.
+    #
     # Note: If you have changed this field, then the related statefulset object need to be recreated, or there will be an error like this:
     #       updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy',
     #       'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden
-    podManagementPolicy: OrderedReady
+    podManagementPolicy: Parallel
     # Lifecycle describes actions that the management system should take in response to container lifecycle events.
     # By default, Operator will add corresponding preStop hooks for different components. For example, the preStop
     # script for the FE Component is /opt/starrocks/fe_prestop.sh,
@@ -993,6 +1005,10 @@ phoenixai:
       #
       # For persistent storage, specify a volume name prefix.
       # For example, using `cn` as the name prefix would be appropriate.
+      # Note: this name is the switch for the whole block. While it is "", no PersistentVolumeClaim is
+      #       created and EVERY other field below (storageClassName, storageSize, storageCount,
+      #       storageMountPath, logStorageSize, ...) is ignored — setting one of them alone changes
+      #       nothing, and nothing reports that it was ignored.
       # Note: If the values of the following mountPaths are not default, you must set the name to cn.
       name: ""
       # The storageClassName represent the used storageclass name. If not set will use k8s cluster default storageclass.
@@ -1122,8 +1138,8 @@ phoenixai:
     minReadySeconds: 0
     # podManagementPolicy controls how pods are created during initial scale up, when replacing pods on nodes, or when scaling down.
     # The default policy is Parallel, which is not the same as statefulset's default policy. CN is stateless compute-only,
-    # so scaling out/in pods in parallel is safe and faster; FE defaults to OrderedReady instead because it must be
-    # scaled up/down one by one.
+    # so scaling out/in pods in parallel is safe and faster. FE defaults to Parallel as well - see the note there for why
+    # OrderedReady is not used.
     # Note: If you have changed this field, then the related statefulset object need to be recreated, or there will be an error like this:
     #       updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy',
     #       'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden
@@ -1624,6 +1640,11 @@ anywhere:
   #                                                   longest-valid one expires within license.expiryWarnWindow
   #   prometheus-dependency-unusable        warning   no Prometheus dependency configured, or anywhere cannot read this
   #                                                   cluster's metrics through it (same checks as the Dependencies page)
+  #   fe-pod-not-ready                      critical  an FE Pod is missing, not Running or not ready (e.g. CrashLoopBackOff);
+  #                                                   read from the Pods themselves, since the CR status reports a
+  #                                                   crash-looping Pod as reconciling
+  #   cn-pod-not-ready                      warning   a CN Pod (the cluster's own or a warehouse's) is missing, not Running
+  #                                                   or not ready
   inspection:
     # Non-empty = allowlist: only these rule ids run.
     enabledRules: []

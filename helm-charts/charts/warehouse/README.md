@@ -55,10 +55,13 @@ topic describes how to use Helm to automatically deploy a PhoenixAI warehouse on
     ```bash
     # Use the above values.yaml to deploy a warehouse in namespace phoenixai
     helm -n phoenixai install warehouse phoenixai/warehouse -f values.yaml
-
-    # Restart the PhoenixAI operator to make it aware of the new CRD
-    kubectl -n phoenixai rollout restart deployment kube-anywhere-operator
     ```
+
+   This chart does not install the `PhoenixAIWarehouse` CRD — the **operator** chart does, because
+   the operator registers its warehouse controller only if the CRD exists when it starts, which is
+   before this chart runs. If the CRD is missing the install fails with
+   `no matches for kind "PhoenixAIWarehouse"`; install it and restart the operator, as described in
+   [Deploy Warehouse](../../../doc/Deploy/deploy_warehouse_howto.md).
 
    Please see [values.yaml](./values.yaml) for more details.
 

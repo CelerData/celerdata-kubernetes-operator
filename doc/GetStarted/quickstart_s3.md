@@ -410,25 +410,11 @@ spec:
 
 ```bash
 helm install wh1 phoenixai/warehouse --namespace phoenixai -f warehouse-values.yaml
-kubectl -n phoenixai rollout restart deployment kube-anywhere-operator
 ```
 
-:::caution The operator must be restarted after the first warehouse
-The `PhoenixAIWarehouse` CRD ships in the warehouse chart, and the operator checks whether that CRD
-exists **once, at startup**. Install the operator first — as you just did — and it has no warehouse
-controller registered, so the `PhoenixAIWarehouse` object you create is never reconciled.
-
-Nothing reports this. `kubectl get paw` shows the object with an empty `STATUS`, there are no pods,
-no events, and no warehouse line in the operator log. The restart above is what makes the controller
-appear; after it, `kubectl -n phoenixai logs deployment/kube-anywhere-operator` includes:
-
-```text
-Starting Controller {"controllerKind": "PhoenixAIWarehouse"}
-```
-
-Only the first warehouse needs this. Once the CRD exists, later warehouse releases are reconciled
-immediately.
-:::
+No operator restart is needed. The operator registers its warehouse controller only if the
+`PhoenixAIWarehouse` CRD exists **when it starts**, and the operator chart you installed above ships
+that CRD next to the cluster one, so the controller is already running.
 
 Confirm it exists as a warehouse rather than merely as pods — `SHOW WAREHOUSES` is the check that
 matters:
@@ -636,11 +622,12 @@ can exceed the FE's `tablet_create_timeout_second` (10 seconds by default). Retr
 `phoenixAIOperator.enableApiServer=true`, so there is no gRPC API for Anywhere to read.
 
 **A warehouse never gets compute pods, with no error anywhere.** Two causes, in the order worth
-checking. First, the operator has not been restarted since the warehouse chart installed the
-`PhoenixAIWarehouse` CRD, so it holds no warehouse controller — `kubectl -n phoenixai logs
-deployment/kube-anywhere-operator | grep PhoenixAIWarehouse` returns nothing, and
-`kubectl rollout restart deployment kube-anywhere-operator` fixes it. Second, the images are
-community builds rather than enterprise `-ee`.
+checking. First, the operator started before the `PhoenixAIWarehouse` CRD existed, so it holds no
+warehouse controller. The operator chart installs that CRD on a fresh install, so this is the case
+of an operator upgraded from an earlier version (`helm upgrade` never installs a chart's `crds/`) or
+one installed with `--skip-crds`. `kubectl -n phoenixai logs deployment/kube-anywhere-operator | grep
+PhoenixAIWarehouse` returns nothing, and `kubectl rollout restart deployment kube-anywhere-operator`
+fixes it. Second, the images are community builds rather than enterprise `-ee`.
 
 **Monitoring pages are empty.** Prometheus is not installed, `anywhere.dependencies.prometheus` is not set,
 or the ServiceMonitors were not rendered (`metrics.serviceMonitor.enabled`). The console has a

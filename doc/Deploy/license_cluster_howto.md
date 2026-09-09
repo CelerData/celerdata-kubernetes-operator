@@ -11,7 +11,7 @@ Follow the steps listed below to acquire and append the license using the RESTfu
 
 :::note
 
-The following operations requires the `cluster_admin` role. For more information, see [Built-in Roles](../administration/user_privs/authorization/built_in_roles.md).
+The following operations require the `cluster_admin` role. For more information, see Built-in Roles in the PhoenixAI Database documentation.
 
 :::
 

@@ -77,7 +77,7 @@ The following is a snippet of the values.yaml file:
 phoenixai:
   phoenixAIFeSpec: # fe storageSpec for persistent metadata.
     storageSpec:
-      name: ""
+      name: "fe"
       # the storageClassName represent the used storageclass name. if not set will use k8s cluster default storageclass.
       # you must set name when you set storageClassName
       # storageClassName: ""
@@ -97,6 +97,11 @@ phoenixai:
       # Setting this parameter can persist log storage
       logStorageSize: 1Gi
 ```
+
+`storageSpec.name` is the switch for its whole block. While it is `""` — the shipped CN default —
+no PersistentVolumeClaim is created and every other field beside it is ignored: `storageClassName`,
+`storageSize`, `storageCount`, `storageMountPath` and `logStorageSize` all have no effect, and
+nothing reports that they were ignored. Set the name first, then the rest of the block takes effect.
 
 ### 2.2. Configure a YAML File with storageSpec settings
 
